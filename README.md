@@ -28,6 +28,7 @@ Add `?rules=2025` to the URL to start with the 2025 rules, or press **R** in gam
 | WASD | Move (relative to the camera) |
 | Shift | Sprint |
 | O | Solo (resets the step count) |
+| Q | Auto-solo on/off: the player solos by themselves on the 4th step |
 | B | Bounce (resets the step count, not twice in a row) |
 | J | Hand-pass |
 | K (hold) | Lofted kick, hold longer for more power |

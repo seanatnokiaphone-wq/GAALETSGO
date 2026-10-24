@@ -21,7 +21,7 @@ export class Hud {
   }
 
   /** stepsTaken out of max; null hides the meter when the player doesn't have the ball in hand. */
-  setSteps(stepsTaken: number | null, max: number, canBounce: boolean): void {
+  setSteps(stepsTaken: number | null, max: number, canBounce: boolean, autoSolo = false): void {
     const meter = this.el('steps');
     meter.hidden = stepsTaken === null;
     if (stepsTaken === null) return;
@@ -30,8 +30,8 @@ export class Hud {
       p.className = i < stepsTaken ? (stepsTaken >= max ? 'warn' : 'on') : '';
     });
     const hint = this.el('steps-hint');
-    hint.textContent = stepsTaken >= max ? (canBounce ? 'BOUNCE OR SOLO' : 'SOLO NOW') : canBounce ? '' : 'NO BOUNCE';
-    hint.className = stepsTaken >= max ? 'warn' : '';
+    hint.textContent = autoSolo ? 'AUTO SOLO' : stepsTaken >= max ? (canBounce ? 'BOUNCE OR SOLO' : 'SOLO NOW') : canBounce ? '' : 'NO BOUNCE';
+    hint.className = stepsTaken >= max && !autoSolo ? 'warn' : '';
   }
 
   setPrompt(text: string): void {
@@ -48,7 +48,11 @@ export class Hud {
     const meter = this.el('curl');
     meter.hidden = power === null || curl === null;
     if (power === null || curl === null) return;
-    (meter.querySelector('b') as HTMLElement).style.left = `${50 + curl * 50}%`;
+    const mark = meter.querySelector('b') as HTMLElement;
+    mark.style.left = `${50 + curl * 50}%`;
+    // Yellow when straight, shading to red at full curl.
+    const a = Math.abs(curl);
+    mark.style.background = `rgb(${Math.round(242 + 13 * a)}, ${Math.round(193 - 162 * a)}, ${Math.round(46 - 26 * a)})`;
     const side = Math.abs(curl) < 0.1 ? 'STRAIGHT' : `${curl < 0 ? '◀ LEFT' : 'RIGHT ▶'} ${Math.round(Math.abs(curl) * 100)}%`;
     this.el('curl-label').textContent = `CURL ${side}`;
   }

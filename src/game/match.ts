@@ -20,9 +20,9 @@ import { Input } from './input';
 type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number; curl: number };
 const MAX_QUEUED = 3;
 /** How far (radians) full curl pushes the kick off the line the player faces. */
-const CURL_AIM = 0.12;
-/** Sidespin (rad/s) at full curl; with the Magnus force it bends a long kick about 5 m. */
-const CURL_SPIN = 30;
+const CURL_AIM = 0.4;
+/** Sidespin (rad/s) at full curl; with the Magnus force it bends a long kick about 15 m. */
+const CURL_SPIN = 40;
 /** Points in the flight preview line (a fixed count so the line can be updated in place). */
 const AIM_POINTS = 240;
 
@@ -96,6 +96,8 @@ export class Match {
   private camReturn = false;
   /** Seconds the player has been on the move; after MOVE_CAM_DELAY the camera swings round behind them. */
   private moveTime = 0;
+  /** Q toggles auto-solo: the player solos by themselves on the last legal step. */
+  private autoSolo = false;
   /** Broadcast camera: slide along the sideline, height and zoom. */
   private bcPan = 0;
   private bcHeight = 16;
@@ -159,6 +161,10 @@ export class Match {
     if (inp.wasPressed('F12')) this.newGame();
     if (inp.wasPressed('KeyC')) this.broadcastCam = !this.broadcastCam;
     if (inp.wasPressed('KeyV')) this.resetView();
+    if (inp.wasPressed('KeyQ')) {
+      this.autoSolo = !this.autoSolo;
+      this.hud.banner(this.autoSolo ? 'AUTO SOLO ON' : 'AUTO SOLO OFF', this.autoSolo ? `Solo every ${this.rules.maxSteps} steps · Q to turn off` : 'Solo or bounce yourself', 1.6);
+    }
     this.applyClick();
     this.applyLook(dt);
 
@@ -183,7 +189,7 @@ export class Match {
     }
     this.hud.setClock(this.clock);
     const inHand = this.carry.kind === 'hand' || this.carry.kind === 'bounce' || this.carry.kind === 'solo';
-    this.hud.setSteps(inHand ? this.tracker.steps : null, this.rules.maxSteps, this.tracker.canBounce());
+    this.hud.setSteps(inHand ? this.tracker.steps : null, this.rules.maxSteps, this.tracker.canBounce(), this.autoSolo);
     this.hud.setPower(this.charge ? this.charge.power : null, this.charge?.key === 'PadX' ? this.charge.curl : null);
     this.updateBallMarker();
     this.hud.update(dt);
@@ -299,6 +305,10 @@ export class Match {
         this.stepDist -= STEP_LENGTH;
         const res = this.tracker.step();
         if (!res.ok) return this.foul('Overcarrying', `${this.tracker.steps} steps without a bounce or solo`);
+      }
+      // Auto-solo: on the last legal step, solo straight away (ahead of anything else queued).
+      if (this.autoSolo && this.tracker.steps >= this.rules.maxSteps && !this.queue.some((a) => a.kind === 'solo')) {
+        this.queue.unshift({ kind: 'solo' });
       }
     } else {
       this.stepDist = 0;
@@ -544,6 +554,10 @@ export class Match {
     } else {
       BABYLON.MeshBuilder.CreateTube('aimLine', { path: points, radius: 0.05, instance: this.aimLine });
     }
+    // Yellow for a straight kick, shading to red at full curl.
+    const tint = BABYLON.Color3.Lerp(new BABYLON.Color3(0.95, 0.76, 0.18), new BABYLON.Color3(1, 0.12, 0.08), Math.abs(c.curl));
+    (this.aimLine.material as BABYLON.StandardMaterial).emissiveColor = tint;
+    (this.aimLanding.material as BABYLON.StandardMaterial).emissiveColor = tint;
     this.aimLine.setEnabled(true);
     this.aimLanding.position.set(landing.x, 0.04, landing.z);
     this.aimLanding.setEnabled(true);
