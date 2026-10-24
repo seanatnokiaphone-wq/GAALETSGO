@@ -32,7 +32,7 @@ Add `?rules=2025` to the URL to start with the 2025 rules, or press **R** in gam
 | F | Shoulder charge the nearest opponent within reach |
 | F1 | Ball cam: a picture-in-picture view from a drone chasing just behind the ball. Starts top right; drag it to move it |
 | B | Bounce (resets the step count, not twice in a row) |
-| J | Hand-pass |
+| J | Hand-pass; without the ball, switch to the teammate nearest the ball |
 | K (hold) | Lofted kick, hold longer for more power |
 | L (hold) | Low drilled kick, for goal shots |
 | E | Toe-pick a ball on the ground into your hands (within about 2 m; press it just before you reach the ball) |
@@ -54,7 +54,7 @@ Plug in or pair a controller and press any button; the help panel switches to th
 | Left stick / d-pad | Move |
 | Right stick | Look around; the camera goes back behind the player when you let go |
 | RB or left stick click | Sprint |
-| A | Hand-pass |
+| A | Hand-pass; without the ball, switch to the teammate nearest the ball |
 | B or RT | Solo (drop the ball onto the toe and back to the hands) |
 | LT | Bounce |
 | X, ball on the grass | Toe-pick |

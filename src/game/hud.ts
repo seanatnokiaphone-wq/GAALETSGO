@@ -34,6 +34,16 @@ export class Hud {
     hint.className = stepsTaken >= max && !autoSolo ? 'warn' : '';
   }
 
+  /** The player card: who the user is controlling. */
+  setPlayer(num: number, name: string, pos: string): void {
+    const nm = this.el('card-name');
+    nm.innerHTML = '';
+    const n = document.createElement('span');
+    n.textContent = String(num);
+    nm.append(n, name);
+    this.el('card-pos').textContent = `${pos} · ARDMORE`;
+  }
+
   setPrompt(text: string): void {
     const p = this.el('prompt');
     p.textContent = text;

@@ -17,6 +17,7 @@ import { BALL_RADIUS, Ball, predictFlight } from './ball';
 import { BallCam } from './ballcam';
 import { Crowd, SHOULDER_REACH } from './bodies';
 import { Hud } from './hud';
+import { ARDMORE } from './roster';
 import { Input } from './input';
 
 type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number; curl: number; follow?: boolean; yaw?: number };
@@ -108,6 +109,10 @@ export class Match {
   private followBall = 0;
   /** Push on the controlled player from bumps and shoulders; fades away. */
   private meKnock = BABYLON.Vector3.Zero();
+  /** The player the game starts with (#14), and the controlled player's own spot in the formation. */
+  private startFig: PlayerFigure;
+  private myHome = new BABYLON.Vector3(35, 0, -4);
+  private myHomeYaw = 0;
   /** 0 looks ahead of the player, 1 looks at the ball; eased so the camera doesn't jump. */
   private ballLook = 0;
   /** F1: picture-in-picture camera chasing the ball. */
@@ -143,6 +148,8 @@ export class Match {
     this.tracker = new CarryTracker(rules);
     this.tracker.start('catch');
     this.player.place(35, -4, HL, 0);
+    this.startFig = player;
+    this.myHomeYaw = this.player.root.rotation.y;
     this.camYaw = this.player.root.rotation.y;
     this.marker = BABYLON.MeshBuilder.CreateDisc('marker', { radius: 0.55, tessellation: 32 }, scene);
     this.marker.rotation.x = Math.PI / 2;
@@ -415,6 +422,9 @@ export class Match {
       return;
     }
 
+    // Without the ball, A (J) switches to the teammate nearest the ball.
+    if (c.kind === 'none' && inp.wasPressed('KeyJ')) this.switchPlayer();
+
     if (c.kind === 'none' && this.ball.isFree) {
       this.sinceRelease += dt;
       if (this.checkLines()) return;
@@ -530,6 +540,39 @@ export class Match {
       return true;
     }
     return false;
+  }
+
+  /** Take control of the Ardmore outfield player nearest the ball (or the start player, for a new game). */
+  private switchPlayer(to?: PlayerFigure): void {
+    const ball = this.ball.position;
+    let best: (typeof this.crowd.bodies)[number] | null = null;
+    let bestD = Math.hypot(ball.x - this.player.root.position.x, ball.z - this.player.root.position.z);
+    for (const b of this.crowd.bodies) {
+      if (b.team !== 'ARD' || b.keeper) continue;
+      if (to) {
+        if (b.fig === to) best = b;
+        continue;
+      }
+      const d = Math.hypot(ball.x - b.fig.root.position.x, ball.z - b.fig.root.position.z);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    if (!best) return; // Already the nearest.
+    const taken = this.crowd.swapIn(best, this.player, this.myHome, this.myHomeYaw);
+    this.player = taken.fig;
+    this.myHome = taken.home;
+    this.myHomeYaw = taken.homeYaw;
+    this.speed = 0;
+    this.moveYaw = null;
+    this.faceYaw = null;
+    this.actionPose = null;
+    this.stepDist = 0;
+    this.meKnock.setAll(0);
+    const info = ARDMORE[this.player.num];
+    if (info) this.hud.setPlayer(this.player.num, info.name, info.pos);
+    if (!to) this.hud.banner(`#${this.player.num}`, info ? info.name : '', 0.8);
   }
 
   /** Lean into the nearest opponent within reach and knock them off balance (or just brace if no one is near). */
@@ -722,6 +765,8 @@ export class Match {
     this.followBall = 0;
     this.ballLook = 0;
     this.meKnock.setAll(0);
+    if (this.player !== this.startFig) this.switchPlayer(this.startFig);
+    this.myHome.set(35, 0, -4);
     this.crowd.reset();
     this.broadcastCam = false;
     this.moveYaw = null;

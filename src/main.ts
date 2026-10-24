@@ -21,7 +21,7 @@ const LINE_UP: [number, number][] = [
 ];
 
 const PAD_HELP = `<b>Left stick</b> move · <b>RB</b> sprint<br />
-  <b>A</b> hand-pass · <b>B</b> or <b>RT</b> solo · <b>LT</b> bounce · <b>X</b> toe-pick off the grass<br />
+  <b>A</b> hand-pass (no ball: switch player) · <b>B</b> or <b>RT</b> solo · <b>LT</b> bounce · <b>X</b> toe-pick off the grass<br />
   <b>X</b> hold to kick from the hands: power bar, <b>left stick</b> ◀ ▶ curls it<br />
   <b>Y</b> hold for a lofted kick · <b>Right stick</b> look around, let go to snap back<br />
   <b>LB</b> shoulder · <b>View</b> camera · <b>R3</b> rules · <b>Menu</b> new game`;

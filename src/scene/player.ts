@@ -27,7 +27,7 @@ export class PlayerFigure {
   /** Point between the hands where a carried ball sits, in the root's local space. */
   static readonly CARRY_OFFSET = new BABYLON.Vector3(0, 1.22, 0.32);
 
-  constructor(scene: BABYLON.Scene, kit: Kit, num: number, shadows: BABYLON.ShadowGenerator, seed = 0) {
+  constructor(scene: BABYLON.Scene, kit: Kit, readonly num: number, shadows: BABYLON.ShadowGenerator, seed = 0) {
     const skins = ['#e8c2a4', '#d9a98a', '#f0cdb2', '#c98f6c', '#e3b597'];
     const hairs = ['#3b2a1e', '#1c1611', '#6b4a2e', '#a0703a', '#2a2420'];
     const skin = colour(scene, skins[seed % skins.length]);

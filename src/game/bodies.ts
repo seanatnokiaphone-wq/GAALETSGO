@@ -79,6 +79,21 @@ export class Crowd {
     }
   }
 
+  /**
+   * The user takes control of `body`'s player: `outgoing` (the player they were controlling, with their
+   * own starting spot) joins the crowd in its place. Returns the player taken over and their spot.
+   */
+  swapIn(body: Body, outgoing: PlayerFigure, outHome: BABYLON.Vector3, outYaw: number): { fig: PlayerFigure; home: BABYLON.Vector3; homeYaw: number } {
+    const taken = { fig: body.fig, home: body.home, homeYaw: body.homeYaw };
+    body.fig = outgoing;
+    body.home = outHome.clone();
+    body.homeYaw = outYaw;
+    body.knock.setAll(0);
+    body.stun = 0;
+    body.charging = 0;
+    return taken;
+  }
+
   /** The nearest opponent of `team` within `reach` of `at`, if any. */
   nearestOpponent(at: BABYLON.Vector3, team: Team, reach: number): Body | null {
     let best: Body | null = null;
