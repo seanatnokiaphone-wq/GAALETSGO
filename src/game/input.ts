@@ -7,7 +7,7 @@ const PAD_BUTTONS: [index: number, code: string][] = [
   [1, 'KeyO'], // B: solo
   [2, 'PadX'], // X: kick from the hands (hold for power, left stick curls), toe-pick off the ground
   [3, 'KeyK'], // Y: lofted kick (hold for power)
-  [4, 'KeyV'], // LB: reset camera
+  [4, 'KeyF'], // LB: shoulder charge
   [5, 'ShiftLeft'], // RB: sprint
   [6, 'KeyB'], // LT: bounce
   [7, 'KeyO'], // RT: solo

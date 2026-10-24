@@ -1,8 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
 import type { Ball } from './ball';
 
-/** Where the picture-in-picture sits, as fractions of the screen (Babylon viewports start bottom-left). */
-const VIEW = { x: 0.7, y: 0.64, w: 0.28, h: 0.28 };
+/** Size of the picture-in-picture as a fraction of the screen; it starts in the top-right corner. */
+const SIZE = 0.28;
 /** How far behind and above the ball the drone flies, in metres: close in flight, further back (over the player's shoulder) while the ball is carried. */
 const BEHIND = 1.1;
 const ABOVE = 0.22;
@@ -34,14 +34,44 @@ export class BallCam {
     this.camera.minZ = 0.05;
     this.camera.maxZ = 2000;
     this.camera.fov = 1.0;
-    this.camera.viewport = new BABYLON.Viewport(VIEW.x, VIEW.y, VIEW.w, VIEW.h);
+    this.camera.viewport = new BABYLON.Viewport(1 - SIZE, 1 - SIZE, SIZE, SIZE);
     this.frame = document.getElementById('ballcam')!;
-    Object.assign(this.frame.style, {
-      left: `${VIEW.x * 100}%`,
-      top: `${(1 - VIEW.y - VIEW.h) * 100}%`,
-      width: `${VIEW.w * 100}%`,
-      height: `${VIEW.h * 100}%`,
+    this.place(1 - SIZE, 0);
+    this.makeDraggable();
+  }
+
+  /** Puts the picture's top-left corner at (left, top), as fractions of the screen, kept on screen. */
+  private place(left: number, top: number): void {
+    left = BABYLON.Scalar.Clamp(left, 0, 1 - SIZE);
+    top = BABYLON.Scalar.Clamp(top, 0, 1 - SIZE);
+    // Babylon viewports are measured from the bottom-left; the HTML frame from the top-left.
+    this.camera.viewport.x = left;
+    this.camera.viewport.y = 1 - top - SIZE;
+    Object.assign(this.frame.style, { left: `${left * 100}%`, top: `${top * 100}%`, width: `${SIZE * 100}%`, height: `${SIZE * 100}%` });
+  }
+
+  /** Drag the picture anywhere on screen with the mouse or a finger. */
+  private makeDraggable(): void {
+    let drag: { id: number; x: number; y: number; left: number; top: number } | null = null;
+    this.frame.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: this.camera.viewport.x, top: 1 - this.camera.viewport.y - SIZE };
+      try {
+        this.frame.setPointerCapture(e.pointerId);
+      } catch {
+        // Dragging still works while the pointer stays over the picture.
+      }
     });
+    this.frame.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      this.place(drag.left + (e.clientX - drag.x) / innerWidth, drag.top + (e.clientY - drag.y) / innerHeight);
+    });
+    const end = (e: PointerEvent) => {
+      if (drag && e.pointerId === drag.id) drag = null;
+    };
+    this.frame.addEventListener('pointerup', end);
+    this.frame.addEventListener('pointercancel', end);
   }
 
   get enabled(): boolean {

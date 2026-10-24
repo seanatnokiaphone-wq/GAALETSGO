@@ -15,6 +15,7 @@ import {
 import { PlayerFigure, type PoseName } from '../scene/player';
 import { BALL_RADIUS, Ball, predictFlight } from './ball';
 import { BallCam } from './ballcam';
+import { Crowd, SHOULDER_REACH } from './bodies';
 import { Hud } from './hud';
 import { Input } from './input';
 
@@ -105,6 +106,8 @@ export class Match {
   private autoSolo = false;
   /** Seconds left of the camera watching the ball's flight after an X kick. */
   private followBall = 0;
+  /** Push on the controlled player from bumps and shoulders; fades away. */
+  private meKnock = BABYLON.Vector3.Zero();
   /** 0 looks ahead of the player, 1 looks at the ball; eased so the camera doesn't jump. */
   private ballLook = 0;
   /** F1: picture-in-picture camera chasing the ball. */
@@ -134,6 +137,7 @@ export class Match {
     private hud: Hud,
     private rules: RuleSet,
     private onRulesToggle: () => RuleSet,
+    private crowd: Crowd,
   ) {
     this.startRules = rules.id;
     this.tracker = new CarryTracker(rules);
@@ -187,9 +191,11 @@ export class Match {
     } else {
       this.clock += dt;
       this.movePlayer(dt);
+      if (inp.wasPressed('KeyF')) this.shoulderCharge();
       this.handleBall(dt);
       this.updateAim();
     }
+    this.updateBodies(dt);
 
     this.poseBallInHand(dt);
     this.updateCamera(dt);
@@ -514,6 +520,42 @@ export class Match {
     return false;
   }
 
+  /** Lean into the nearest opponent within reach and knock them off balance (or just brace if no one is near). */
+  private shoulderCharge(): void {
+    if (this.actionPose) return;
+    const me = this.player.root.position;
+    const opp = this.crowd.nearestOpponent(me, 'ARD', SHOULDER_REACH);
+    this.actionPose = { pose: 'shoulder', t: 0.35 };
+    if (!opp) return;
+    const dir = opp.fig.root.position.subtract(me);
+    dir.y = 0;
+    dir.normalize();
+    this.player.root.rotation.y = Math.atan2(dir.x, dir.z) - 0.5;
+    this.crowd.shoulder(opp, dir, 4 + this.speed * 0.4);
+    this.speed *= 0.7;
+  }
+
+  /** Opponents close in and shoulder the ball carrier, and nobody runs through anybody. */
+  private updateBodies(dt: number): void {
+    const c = this.carry.kind;
+    const hasBall = this.deadTime <= 0 && (c === 'hand' || c === 'solo' || c === 'bounce' || c === 'toePick');
+    const contacts = this.crowd.update(dt, { fig: this.player, team: 'ARD', speed: this.speed, hasBall }, this.meKnock);
+    for (const k of contacts) {
+      if (k.kind === 'shoulderedBy') {
+        this.speed *= 0.45;
+        this.actionPose = { pose: 'stumble', t: 0.35 };
+        this.hud.banner('SHOULDERED', this.input.usingPad ? 'LB to give one back' : 'F to give one back', 1);
+      } else {
+        this.speed *= 0.75;
+      }
+    }
+    const root = this.player.root;
+    root.position.addInPlace(this.meKnock.scale(dt));
+    this.meKnock.scaleInPlace(Math.exp(-4 * dt));
+    root.position.x = BABYLON.Scalar.Clamp(root.position.x, -HL - 3, HL + 3);
+    root.position.z = BABYLON.Scalar.Clamp(root.position.z, -HW - 3, HW + 3);
+  }
+
   /**
    * Points out the ball whenever it isn't in the player's hands: a marker over it on screen, or an
    * arrow at the screen edge pointing towards it, with the distance.
@@ -667,6 +709,8 @@ export class Match {
     this.moveTime = 0;
     this.followBall = 0;
     this.ballLook = 0;
+    this.meKnock.setAll(0);
+    this.crowd.reset();
     this.broadcastCam = false;
     this.moveYaw = null;
     this.lastStrike = { method: 'kick', fromX: 0, fromZ: 0 };

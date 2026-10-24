@@ -17,7 +17,7 @@ export const KITS = {
   kilcarraKeeper: { jersey: '#f2d43a', shorts: '#111111', socks: '#111111', band: null, numberColour: '#111111' },
 } satisfies Record<string, Kit>;
 
-export type PoseName = 'stand' | 'run' | 'carry' | 'kick' | 'handPass' | 'jump' | 'keeper' | 'toePick' | 'solo';
+export type PoseName = 'stand' | 'run' | 'carry' | 'kick' | 'handPass' | 'jump' | 'keeper' | 'toePick' | 'solo' | 'shoulder' | 'stumble';
 
 /** Greybox player: a jointed capsule figure. Stands in until rigged glTF characters arrive. */
 export class PlayerFigure {
@@ -162,6 +162,20 @@ export class PlayerFigure {
         set('lFore', -1.25 + 0.6 * w, 0.5); set('rFore', -1.25 + 0.6 * w, -0.5);
         break;
       }
+      case 'shoulder':
+        // Side-on, low and braced, leading with the left shoulder, arms tucked in.
+        this.hips.rotation.set(0.25, 0, -0.32);
+        this.hips.position.y = 0.88;
+        set('lThigh', -0.35, -0.15); set('rThigh', 0.3, 0.1); set('lShin', 0.5); set('rShin', 0.35);
+        set('lArm', -0.2, 0.05); set('rArm', -0.6, 0.3); set('lFore', -1.6); set('rFore', -1.4);
+        break;
+      case 'stumble':
+        // Knocked off balance: leaning back, arms out, one leg stepping back to catch the fall.
+        this.hips.rotation.set(-0.3, 0, 0.12);
+        this.hips.position.y = 0.9;
+        set('lThigh', -0.45); set('rThigh', 0.5); set('lShin', 0.3); set('rShin', 0.6);
+        set('lArm', -1.2, -0.9); set('rArm', -1.0, 0.9); set('lFore', -0.3); set('rFore', -0.3);
+        break;
       case 'handPass':
         this.hips.rotation.x = 0.1;
         set('lThigh', -0.5); set('rThigh', 0.35); set('lShin', 0.4); set('rShin', 0.5);

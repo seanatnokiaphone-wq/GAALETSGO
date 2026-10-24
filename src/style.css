@@ -78,6 +78,6 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .ballmark.edge span { top: 18px; }
 
 /* Frame and label over the F1 ball-cam picture-in-picture (the 3D view itself is a second camera viewport). */
-.ballcam { position: absolute; border: 2px solid #f2c12e; box-shadow: 0 4px 18px #0008; box-sizing: border-box; }
+.ballcam { position: absolute; border: 2px solid #f2c12e; box-shadow: 0 4px 18px #0008; box-sizing: border-box; pointer-events: auto; cursor: move; touch-action: none; z-index: 5; }
 .ballcam[hidden] { display: none; }
 .ballcam span { position: absolute; left: 0; top: 0; background: #f2c12e; color: #111; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 8px; }

@@ -5,6 +5,7 @@ import { createEnvironment, createPostProcessing } from './scene/environment';
 import { createGoals } from './scene/goals';
 import { createPitch } from './scene/pitch';
 import { KITS, PlayerFigure } from './scene/player';
+import { Crowd } from './game/bodies';
 import { createStadium } from './scene/stadium';
 import { Ball } from './game/ball';
 import { Hud } from './game/hud';
@@ -23,7 +24,7 @@ const PAD_HELP = `<b>Left stick</b> move · <b>RB</b> sprint<br />
   <b>A</b> hand-pass · <b>B</b> or <b>RT</b> solo · <b>LT</b> bounce · <b>X</b> toe-pick off the grass<br />
   <b>X</b> hold to kick from the hands: power bar, <b>left stick</b> ◀ ▶ curls it<br />
   <b>Y</b> hold for a lofted kick · <b>Right stick</b> look around, let go to snap back<br />
-  <b>View</b> camera · <b>LB</b> reset view · <b>R3</b> rules · <b>Menu</b> new game`;
+  <b>LB</b> shoulder · <b>View</b> camera · <b>R3</b> rules · <b>Menu</b> new game`;
 
 async function start(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -57,18 +58,22 @@ async function start(): Promise<void> {
     new BABYLON.PhysicsAggregate(m, BABYLON.PhysicsShapeType.CYLINDER, { mass: 0, restitution: 0.5, friction: 0.3 }, scene);
   }
 
-  // Everyone else stands in formation for now; team AI arrives in a later milestone.
+  // Everyone else starts in formation. Kilcarra close down the ball carrier and shoulder them; full
+  // team AI arrives in a later milestone.
+  const crowd = new Crowd();
   LINE_UP.forEach(([x, z], i) => {
     const num = i + 1;
     if (num !== 14) {
       const a = new PlayerFigure(scene, i === 0 ? KITS.ardmoreKeeper : KITS.ardmore, num, shadows, i);
       a.place(x * 0.8, z, HL, z);
       a.pose(i === 0 ? 'keeper' : 'stand');
+      crowd.add(a, 'ARD', i === 0);
     }
     const b = new PlayerFigure(scene, i === 0 ? KITS.kilcarraKeeper : KITS.kilcarra, num, shadows, i + 15);
     const bx = i === 0 ? HL - 1.2 : -x * 0.75 + 4;
     b.place(bx, -z * 0.9, -HL, -z);
     b.pose(i === 0 ? 'keeper' : 'stand');
+    crowd.add(b, 'KIL', i === 0);
   });
 
   const me = new PlayerFigure(scene, KITS.ardmore, 14, shadows, 3);
@@ -93,7 +98,7 @@ async function start(): Promise<void> {
     document.body.classList.add('touch-mode');
     createTouchControls(input, document.getElementById('hud')!);
   }
-  const match = new Match(scene, camera, me, ball, input, hud, rules, toggleRules);
+  const match = new Match(scene, camera, me, ball, input, hud, rules, toggleRules, crowd);
 
   scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(engine.getDeltaTime() / 1000, 1 / 20);

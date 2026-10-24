@@ -7,6 +7,7 @@ const BUTTONS: { code: string; label: string; cls: string }[] = [
   { code: 'KeyB', label: 'Bounce', cls: 'bounce' },
   { code: 'KeyL', label: 'Low kick', cls: 'low' },
   { code: 'KeyE', label: 'Toe-pick', cls: 'pick' },
+  { code: 'KeyF', label: 'Shoulder', cls: 'shoulder' },
 ];
 
 /** On-screen stick and buttons for phones and tablets. Pushing the stick to the edge sprints. */

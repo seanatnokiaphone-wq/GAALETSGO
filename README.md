@@ -29,7 +29,8 @@ Add `?rules=2025` to the URL to start with the 2025 rules, or press **R** in gam
 | Shift | Sprint |
 | O | Solo (resets the step count) |
 | Q | Auto-solo on/off: the player solos by themselves on the 4th step |
-| F1 | Ball cam: a picture-in-picture view from a drone chasing just behind the ball |
+| F | Shoulder charge the nearest opponent within reach |
+| F1 | Ball cam: a picture-in-picture view from a drone chasing just behind the ball. Starts top right; drag it to move it |
 | B | Bounce (resets the step count, not twice in a row) |
 | J | Hand-pass |
 | K (hold) | Lofted kick, hold longer for more power |
@@ -60,7 +61,7 @@ Plug in or pair a controller and press any button; the help panel switches to th
 | X (hold), ball in hand | Kick: the bar fills for height and distance, the left stick left or right curls it, and a line shows where it will land |
 | Y (hold) | Lofted kick |
 | View | Switch camera |
-| LB | Reset camera view |
+| LB | Shoulder charge |
 | Right stick click | Switch rules |
 | Menu | New game |
 
