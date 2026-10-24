@@ -37,6 +37,8 @@ const STRIDE = 1.5; // metres per foot plant
  * player has time (about 1.8 s at a jog, 1.25 s sprinting) before the fourth step.
  */
 const STEP_LENGTH = 2.5;
+/** Seconds of running before the camera swings round behind the player. */
+const MOVE_CAM_DELAY = 3;
 const JOG = 5.5;
 const SPRINT = 8;
 const MOVE_DURATION = { bounce: 0.42, solo: 0.55, toePick: 0.55 } as const;
@@ -92,6 +94,8 @@ export class Match {
   private sinceLook = 99;
   /** Set by a right-stick pan: once the stick is let go the camera eases back behind the player. */
   private camReturn = false;
+  /** Seconds the player has been on the move; after MOVE_CAM_DELAY the camera swings round behind them. */
+  private moveTime = 0;
   /** Broadcast camera: slide along the sideline, height and zoom. */
   private bcPan = 0;
   private bcHeight = 16;
@@ -284,6 +288,9 @@ export class Match {
   }
 
   private stepAndPose(dt: number): void {
+    // Keep running for a few seconds and the camera settles back behind the player (not while it's being moved by hand).
+    this.moveTime = this.speed > 0.5 ? this.moveTime + dt : 0;
+    if (this.moveTime > MOVE_CAM_DELAY && !this.broadcastCam && !this.input.rightStickHeld && this.sinceLook > 0.5) this.camReturn = true;
     // The run cycle animates the legs; steps are counted by distance below.
     this.phase += ((this.speed * dt) / STRIDE) * Math.PI;
     if (this.carry.kind === 'hand') {
@@ -624,6 +631,7 @@ export class Match {
     this.sinceRelease = 0;
     this.sinceLook = 99;
     this.camReturn = false;
+    this.moveTime = 0;
     this.broadcastCam = false;
     this.moveYaw = null;
     this.lastStrike = { method: 'kick', fromX: 0, fromZ: 0 };
@@ -676,7 +684,7 @@ export class Match {
     }
   }
 
-  /** Swing the camera back to its usual spot behind the player after a right-stick pan. */
+  /** Swing the camera back to its usual spot behind the player (after a right-stick pan, or a few seconds of running). */
   private returnCamera(dt: number): void {
     let d = this.player.root.rotation.y - this.camYaw;
     d = Math.atan2(Math.sin(d), Math.cos(d));
