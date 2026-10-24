@@ -32,6 +32,11 @@ type Carry =
   | { kind: 'bounce' | 'solo' | 'toePick'; t: number; from: BABYLON.Vector3 };
 
 const STRIDE = 1.5; // metres per foot plant
+/**
+ * Distance run with the ball in hand that counts as one step. Longer than the animation's stride so a
+ * player has time (about 1.8 s at a jog, 1.25 s sprinting) before the fourth step.
+ */
+const STEP_LENGTH = 2.5;
 const JOG = 5.5;
 const SPRINT = 8;
 const MOVE_DURATION = { bounce: 0.42, solo: 0.55, toePick: 0.55 } as const;
@@ -55,6 +60,8 @@ export class Match {
   private clock = 0;
   private phase = 0;
   private speed = 0;
+  /** Metres run in hand towards the next counted step. */
+  private stepDist = 0;
   /**
    * A kick being powered up. With the controller's X (`PadX`) the left stick sets `curl` from -1
    * (bend left) to 1 (bend right) instead of moving the player.
@@ -254,32 +261,40 @@ export class Match {
   }
 
   /**
-   * While X is held for a kick the player plants to strike: they ease to a stop, keep facing the same
-   * way, and the left stick's left/right sets the curl.
+   * While X is held for a kick the player keeps running the way they face (the stick pushed any way
+   * keeps them going, RB sprints) without turning, and the stick's left/right sets the curl.
    */
   private aimKick(dt: number): void {
+    const inp = this.input;
     const c = this.charge!;
     this.moveYaw = null;
     this.faceYaw = null;
-    const want = Math.abs(this.input.stick.x) > 0.15 ? BABYLON.Scalar.Clamp(this.input.stick.x, -1, 1) : 0;
+    const want = Math.abs(inp.stick.x) > 0.15 ? BABYLON.Scalar.Clamp(inp.stick.x, -1, 1) : 0;
     c.curl += (want - c.curl) * Math.min(1, dt * 8);
-    this.speed *= Math.max(0, 1 - dt * 5);
-    if (this.speed < 0.05) this.speed = 0;
+    const stickLen = Math.hypot(inp.stick.x, inp.stick.y);
+    const keys = ['KeyW', 'ArrowUp', 'KeyS', 'ArrowDown', 'KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight'].some((k) => inp.isDown(k));
+    const sprint = inp.isDown('ShiftLeft') || inp.isDown('ShiftRight');
+    const target = stickLen > 0.15 || keys ? (sprint ? SPRINT : stickLen > 0.15 ? Math.max(2, JOG * Math.min(1, stickLen * 1.3)) : JOG) : 0;
+    this.speed += (target - this.speed) * Math.min(1, dt * 6);
     const root = this.player.root;
     root.position.addInPlace(this.forward().scale(this.speed * dt));
+    root.position.x = BABYLON.Scalar.Clamp(root.position.x, -HL - 3, HL + 3);
+    root.position.z = BABYLON.Scalar.Clamp(root.position.z, -HW - 3, HW + 3);
     this.stepAndPose(dt);
   }
 
   private stepAndPose(dt: number): void {
-    // Each half run cycle is one foot plant.
-    const before = Math.floor(this.phase / Math.PI);
+    // The run cycle animates the legs; steps are counted by distance below.
     this.phase += ((this.speed * dt) / STRIDE) * Math.PI;
-    const plants = Math.floor(this.phase / Math.PI) - before;
     if (this.carry.kind === 'hand') {
-      for (let i = 0; i < plants; i++) {
+      this.stepDist += this.speed * dt;
+      while (this.stepDist >= STEP_LENGTH) {
+        this.stepDist -= STEP_LENGTH;
         const res = this.tracker.step();
         if (!res.ok) return this.foul('Overcarrying', `${this.tracker.steps} steps without a bounce or solo`);
       }
+    } else {
+      this.stepDist = 0;
     }
 
     if (this.actionPose) {
@@ -599,6 +614,7 @@ export class Match {
     this.deadTime = 0;
     this.speed = 0;
     this.phase = 0;
+    this.stepDist = 0;
     this.charge = null;
     this.queue = [];
     this.toePickBuffer = 0;
