@@ -6,7 +6,7 @@
     <title>GAALETSGO</title>
   </head>
   <body>
-    <canvas id="game"></canvas>
+    <canvas id="game" tabindex="0"></canvas>
     <div id="hud">
       <div class="bug">
         <div class="clock"><span id="clock">00:00</span><small id="rules">Classic rules</small></div>
@@ -28,6 +28,13 @@
       </div>
     </div>
     <div id="loading">Loading the pitch…</div>
+    <div id="start" hidden>
+      <div class="start-card">
+        <div class="start-title">GAALETSGO</div>
+        <p>You're Ardmore's full-forward. Carry the ball up to 4 steps, then solo or bounce. Kick it over the bar for a point or under for a goal.</p>
+        <p class="start-go">Tap or click to play</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

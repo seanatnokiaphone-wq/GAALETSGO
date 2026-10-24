@@ -10,6 +10,7 @@ import { Ball } from './game/ball';
 import { Hud } from './game/hud';
 import { Input } from './game/input';
 import { Match } from './game/match';
+import { createTouchControls } from './game/touch';
 import './style.css';
 
 // Standard line-up for a team attacking +x: keeper, full-backs, half-backs, midfield, half-forwards, full-forwards.
@@ -34,7 +35,9 @@ async function start(): Promise<void> {
   camera.maxZ = 2000;
   camera.inputs.clear();
 
-  const { shadows } = createEnvironment(scene);
+  // Phones and tablets get on-screen controls and lighter shadows and anti-aliasing.
+  const touch = matchMedia('(pointer: coarse)').matches;
+  const { shadows } = createEnvironment(scene, touch ? 2048 : 4096);
   const pitch = createPitch(scene, rules);
   createStadium(scene);
   const goalFrames = createGoals(scene, shadows);
@@ -64,7 +67,7 @@ async function start(): Promise<void> {
 
   const me = new PlayerFigure(scene, KITS.ardmore, 14, shadows, 3);
   const ball = new Ball(scene, shadows);
-  createPostProcessing(scene, camera);
+  createPostProcessing(scene, camera, touch ? 1 : 4);
 
   const hud = new Hud();
   const toggleRules = () => {
@@ -72,7 +75,12 @@ async function start(): Promise<void> {
     pitch.redraw(rules);
     return rules;
   };
-  const match = new Match(scene, camera, me, ball, new Input(), hud, rules, toggleRules);
+  const input = new Input();
+  if (touch) {
+    document.body.classList.add('touch-mode');
+    createTouchControls(input, document.getElementById('hud')!);
+  }
+  const match = new Match(scene, camera, me, ball, input, hud, rules, toggleRules);
 
   scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(engine.getDeltaTime() / 1000, 1 / 20);
@@ -82,6 +90,14 @@ async function start(): Promise<void> {
   Object.assign(window, { gaa: { scene, engine, match, HW } });
 
   document.getElementById('loading')?.remove();
+  const startScreen = document.getElementById('start');
+  if (startScreen) {
+    startScreen.hidden = false;
+    startScreen.addEventListener('pointerdown', () => {
+      startScreen.remove();
+      canvas.focus();
+    });
+  }
   engine.runRenderLoop(() => scene.render());
   window.addEventListener('resize', () => engine.resize());
 }

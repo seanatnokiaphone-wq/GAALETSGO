@@ -34,3 +34,30 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .banner .s { font-size: 17px; margin-top: 6px; background: rgba(10,16,12,.86); display: inline-block; padding: 6px 14px; }
 .help { position: absolute; right: 24px; bottom: 24px; background: rgba(10,16,12,.78); padding: 10px 14px; font-size: 13px; line-height: 1.7; color: #dfe9e2; }
 .help b { color: #f2c12e; }
+
+#start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(6,14,9,.55); cursor: pointer; padding: 16px; }
+#start[hidden] { display: none; }
+.start-card { max-width: 440px; background: rgba(10,16,12,.92); color: #e4ebe5; padding: 22px 24px; text-align: center; }
+.start-title { font-size: 34px; font-weight: 800; letter-spacing: .1em; color: #f2c12e; }
+.start-card p { margin: 12px 0 0; line-height: 1.5; }
+.start-go { font-weight: 700; color: #fff; }
+
+/* Touch layout */
+.touch { position: absolute; inset: 0; pointer-events: none; user-select: none; -webkit-user-select: none; touch-action: none; }
+.touch button { pointer-events: auto; touch-action: none; font: inherit; color: #fff; border: 2px solid rgba(255,255,255,.35); background: rgba(10,16,12,.7); }
+.touch button.down { background: rgba(242,193,46,.85); color: #111; }
+.stick { pointer-events: auto; touch-action: none; position: absolute; left: max(20px, env(safe-area-inset-left, 0px)); bottom: max(24px, env(safe-area-inset-bottom, 0px)); width: 140px; height: 140px; border-radius: 50%; background: rgba(10,16,12,.45); border: 2px solid rgba(255,255,255,.3); display: grid; place-items: center; }
+.knob { width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,.75); }
+.buttons { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(3, 76px); gap: 10px; }
+.buttons button { height: 60px; border-radius: 14px; font-size: 13px; font-weight: 700; }
+.buttons .kick { border-color: #f2c12e; }
+.top-buttons { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: 16px; display: flex; gap: 8px; }
+.top-buttons button { padding: 8px 12px; border-radius: 10px; font-size: 13px; }
+.touch-mode .help { display: none; }
+.touch-mode .card { left: 16px; bottom: auto; top: 76px; min-width: 0; padding: 8px 12px; }
+.touch-mode .card .pos { display: none; }
+.touch-mode .bug { left: 16px; top: 12px; }
+.touch-mode .bug .team, .touch-mode .bug .clock { font-size: 16px; padding: 4px 10px; }
+.touch-mode .prompt { bottom: 190px; }
+.touch-mode .banner .t { font-size: 38px; }
+@media (max-width: 520px) { .buttons { grid-template-columns: repeat(3, 64px); } .buttons button { height: 54px; font-size: 12px; } .stick { width: 120px; height: 120px; } }

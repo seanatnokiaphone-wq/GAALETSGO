@@ -6,6 +6,10 @@ A third-person Gaelic football game for the browser, built with Vite, TypeScript
 
 This is the first playable slice: one Ardmore player on a full-size pitch who can run, carry, bounce, solo, toe-pick, kick and hand-pass, with the rules engine calling steps, double bounces, pick-ups and scores. Everyone else stands in formation until team AI arrives.
 
+## Demo
+
+A playable build is published at https://claude.ai/artifact/8tKmfvyRtA6bvKdEBbSh4M (private to the owner). `npm run build:demo` produces the single-bundle version in `dist-demo/`.
+
 ## Run it
 
 ```sh
@@ -32,6 +36,8 @@ Add `?rules=2025` to the URL to start with the 2025 rules, or press **R** in gam
 | G | Pick up with the hands (a foul, to show the rule) |
 | C | Switch between the behind-the-player and broadcast cameras |
 | R | Switch between classic and 2025 rules |
+
+On phones and tablets an on-screen stick and buttons appear. Push the stick to the edge to sprint.
 
 ## Rules
 

@@ -126,8 +126,12 @@ export class Match {
     if (inp.isDown('KeyD')) want.addInPlace(r);
     if (inp.isDown('KeyA')) want.subtractInPlace(r);
 
+    const stickLen = Math.hypot(inp.stick.x, inp.stick.y);
+    if (stickLen > 0.15) want.addInPlace(f.scale(inp.stick.y)).addInPlace(r.scale(inp.stick.x));
+
     const moving = want.lengthSquared() > 0;
-    const target = moving ? (inp.isDown('ShiftLeft') || inp.isDown('ShiftRight') ? SPRINT : JOG) : 0;
+    const sprint = inp.isDown('ShiftLeft') || inp.isDown('ShiftRight') || stickLen > 0.92;
+    const target = moving ? (sprint ? SPRINT : stickLen > 0.15 ? Math.max(2, JOG * Math.min(1, stickLen * 1.3)) : JOG) : 0;
     this.speed += (target - this.speed) * Math.min(1, dt * 6);
     const root = this.player.root;
     if (moving) {
