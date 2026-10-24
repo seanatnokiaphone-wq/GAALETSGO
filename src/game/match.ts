@@ -42,7 +42,12 @@ export class Match {
   private clock = 0;
   private phase = 0;
   private speed = 0;
-  private charge: { key: 'KeyK' | 'KeyL'; power: number } | null = null;
+  /** A kick being powered up. `fire` is set if the key was let go mid-solo or mid-bounce. */
+  private charge: { key: 'KeyK' | 'KeyL'; power: number; fire: boolean } | null = null;
+  /** A hand-pass asked for mid-solo or mid-bounce, played as soon as the ball is back in hand. */
+  private pendingHandPass = false;
+  /** Direction the behind-the-player camera looks. Movement keys are relative to it. */
+  private camYaw = 0;
   private actionPose: { pose: PoseName; t: number } | null = null;
   private deadTime = 0;
   private sinceRelease = 0;
@@ -64,6 +69,7 @@ export class Match {
     this.tracker = new CarryTracker(rules);
     this.tracker.start('catch');
     this.player.place(35, -4, HL, 0);
+    this.camYaw = this.player.root.rotation.y;
     this.marker = BABYLON.MeshBuilder.CreateDisc('marker', { radius: 0.55, tessellation: 32 }, scene);
     this.marker.rotation.x = Math.PI / 2;
     const mm = new BABYLON.StandardMaterial('markerMat', scene);
@@ -116,15 +122,17 @@ export class Match {
 
   private movePlayer(dt: number): void {
     const inp = this.input;
-    // Movement is relative to the camera's view across the ground.
-    const camF = this.camera.getForwardRay().direction;
-    const f = new BABYLON.Vector3(camF.x, 0, camF.z).normalize();
+    // Movement is relative to the camera. The broadcast camera always looks across the pitch (+z).
+    // Using a steady camera direction, not the player's facing, stops left/right from spinning the player.
+    const yaw = this.broadcastCam ? 0 : this.camYaw;
+    const f = new BABYLON.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const r = new BABYLON.Vector3(f.z, 0, -f.x);
     const want = BABYLON.Vector3.Zero();
-    if (inp.isDown('KeyW')) want.addInPlace(f);
-    if (inp.isDown('KeyS')) want.subtractInPlace(f);
-    if (inp.isDown('KeyD')) want.addInPlace(r);
-    if (inp.isDown('KeyA')) want.subtractInPlace(r);
+    const key = (a: string, b: string) => inp.isDown(a) || inp.isDown(b);
+    if (key('KeyW', 'ArrowUp')) want.addInPlace(f);
+    if (key('KeyS', 'ArrowDown')) want.subtractInPlace(f);
+    if (key('KeyD', 'ArrowRight')) want.addInPlace(r);
+    if (key('KeyA', 'ArrowLeft')) want.subtractInPlace(r);
 
     const stickLen = Math.hypot(inp.stick.x, inp.stick.y);
     if (stickLen > 0.15) want.addInPlace(f.scale(inp.stick.y)).addInPlace(r.scale(inp.stick.x));
@@ -140,6 +148,11 @@ export class Match {
       let diff = goal - root.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       root.rotation.y += diff * Math.min(1, dt * 10);
+      // The camera swings round behind the player only while they run away from it.
+      const away = Math.max(0, BABYLON.Vector3.Dot(want, f));
+      let camDiff = root.rotation.y - this.camYaw;
+      camDiff = Math.atan2(Math.sin(camDiff), Math.cos(camDiff));
+      this.camYaw += camDiff * Math.min(1, dt * 1.6 * away);
     }
     root.position.addInPlace(this.forward().scale(this.speed * dt));
     root.position.x = BABYLON.Scalar.Clamp(root.position.x, -HL - 3, HL + 3);
@@ -171,26 +184,35 @@ export class Match {
     const inp = this.input;
     const c = this.carry;
 
+    const holding = c.kind === 'hand' || c.kind === 'bounce' || c.kind === 'solo' || c.kind === 'toePick';
+    if (holding) {
+      // Kicks and hand-passes asked for mid-solo or mid-bounce are kept and played once the ball is back in hand.
+      if (!this.charge && (inp.wasPressed('KeyK') || inp.wasPressed('KeyL'))) {
+        this.charge = { key: inp.wasPressed('KeyK') ? 'KeyK' : 'KeyL', power: 0, fire: false };
+      }
+      if (this.charge) {
+        this.charge.power = Math.min(1, this.charge.power + dt * 1.1);
+        if (inp.wasReleased(this.charge.key)) this.charge.fire = true;
+      }
+      if (c.kind !== 'hand' && inp.wasPressed('KeyJ')) this.pendingHandPass = true;
+    }
+
     if (c.kind === 'hand') {
-      if (inp.wasPressed('KeyB')) {
+      if (this.charge?.fire) {
+        const lofted = this.charge.key === 'KeyK';
+        // A tap is a short chip; a full hold reaches about 60 m.
+        this.release('kick', 8 + 24 * this.charge.power, lofted ? 0.5 : 0.12);
+        this.charge = null;
+      } else if (this.pendingHandPass || inp.wasPressed('KeyJ')) {
+        this.pendingHandPass = false;
+        this.release('handPass', 13, 0.22);
+      } else if (inp.wasPressed('KeyB')) {
         const res = this.tracker.bounce();
         if (!res.ok) return this.foul('Double bounce', 'You can’t bounce twice in a row. Solo in between.');
         this.carry = { kind: 'bounce', t: 0, from: this.ball.position.clone() };
       } else if (inp.wasPressed('KeyO')) {
         this.tracker.solo();
         this.carry = { kind: 'solo', t: 0, from: this.ball.position.clone() };
-      } else if (inp.wasPressed('KeyJ')) {
-        this.release('handPass', 13, 0.22);
-      } else if (inp.wasPressed('KeyK') || inp.wasPressed('KeyL')) {
-        this.charge = { key: inp.wasPressed('KeyK') ? 'KeyK' : 'KeyL', power: 0 };
-      }
-      if (this.charge) {
-        this.charge.power = Math.min(1, this.charge.power + dt * 1.1);
-        if (inp.wasReleased(this.charge.key)) {
-          const lofted = this.charge.key === 'KeyK';
-          this.release('kick', 14 + 20 * this.charge.power, lofted ? 0.5 : 0.12);
-          this.charge = null;
-        }
       }
       this.hud.setPrompt('');
       return;
@@ -287,8 +309,10 @@ export class Match {
     this.hud.banner(title.toUpperCase(), detail, 2.5);
     this.hud.setPrompt('');
     this.charge = null;
+    this.pendingHandPass = false;
     this.deadTime = 2.5;
     this.speed = 0;
+    this.player.pose('stand');
   }
 
   /** Placeholder restart until frees and kick-outs are built: the player gets the ball back in hand. */
@@ -334,12 +358,13 @@ export class Match {
     const me = this.player.root.position;
     const k = Math.min(1, dt * 4);
     if (this.broadcastCam) {
+      this.camYaw = this.player.root.rotation.y;
       const want = new BABYLON.Vector3(me.x * 0.85, 16, -HW - 18);
       this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, want, k);
       this.camera.setTarget(new BABYLON.Vector3(me.x, 0, me.z * 0.6));
       this.camera.fov = 0.5;
     } else {
-      const f = this.forward();
+      const f = new BABYLON.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
       const want = me.subtract(f.scale(6.5)).add(new BABYLON.Vector3(0, 2.6, 0));
       this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, want, k);
       this.camera.setTarget(me.add(f.scale(8)).add(new BABYLON.Vector3(0, 1.2, 0)));

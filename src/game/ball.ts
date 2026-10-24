@@ -3,6 +3,8 @@ import * as BABYLON from '@babylonjs/core';
 export const BALL_RADIUS = 0.11;
 const BALL_MASS = 0.48;
 // 0.5 * air density * drag coefficient * cross-section area.
+/** Per-second slowing of a ball on the grass. */
+const GRASS_RESISTANCE = 1.6;
 const DRAG_K = 0.5 * 1.2 * 0.25 * Math.PI * BALL_RADIUS * BALL_RADIUS;
 
 /**
@@ -74,8 +76,12 @@ export class Ball {
     if (!this.free) return;
     const v = this.body.getLinearVelocity();
     const speed = v.length();
-    if (speed < 0.5) return;
-    this.body.applyForce(v.scale(-DRAG_K * speed), this.mesh.position);
+    if (speed > 0.5) this.body.applyForce(v.scale(-DRAG_K * speed), this.mesh.position);
+    // Grass slows a rolling or skidding ball, so it stops within a few metres instead of rolling on.
+    if (this.mesh.position.y < BALL_RADIUS + 0.05) {
+      this.body.applyForce(new BABYLON.Vector3(-v.x, 0, -v.z).scale(BALL_MASS * GRASS_RESISTANCE), this.mesh.position);
+      this.body.setAngularVelocity(this.body.getAngularVelocity().scale(0.94));
+    }
   }
 }
 
