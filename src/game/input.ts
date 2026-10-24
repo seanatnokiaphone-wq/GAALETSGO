@@ -43,8 +43,8 @@ export class Input {
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
       // One physical press is one action: ignore auto-repeat, including hosts that don't flag it.
-      // F12 resets the game; stop the browser's own use of it where the browser allows.
-      if (e.code === 'F12') e.preventDefault();
+      // F12 resets the game and F1 toggles the ball camera; stop the browser's own use of it where the browser allows.
+      if (e.code === 'F12' || e.code === 'F1') e.preventDefault();
       if (e.repeat || this.down.has(e.code)) return;
       this.usingPad = false;
       this.press(e.code);

@@ -15,7 +15,7 @@ export function createTouchControls(input: Input, root: HTMLElement): void {
   pad.className = 'touch';
   pad.innerHTML = `<div class="stick"><div class="knob"></div></div>
     <div class="buttons">${BUTTONS.map((b) => `<button type="button" class="${b.cls}" data-code="${b.code}">${b.label}</button>`).join('')}</div>
-    <div class="top-buttons"><button type="button" data-code="KeyC">Camera</button><button type="button" data-code="KeyV">Reset view</button><button type="button" data-code="KeyR">Rules</button><button type="button" data-code="F12">New game</button></div>`;
+    <div class="top-buttons"><button type="button" data-code="KeyC">Camera</button><button type="button" data-code="KeyV">Reset view</button><button type="button" data-code="F1">Ball cam</button><button type="button" data-code="KeyR">Rules</button><button type="button" data-code="F12">New game</button></div>`;
   root.appendChild(pad);
 
   pad.querySelectorAll<HTMLButtonElement>('button[data-code]').forEach((btn) => {

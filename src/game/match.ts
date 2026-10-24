@@ -14,10 +14,11 @@ import {
 } from '../rules';
 import { PlayerFigure, type PoseName } from '../scene/player';
 import { BALL_RADIUS, Ball, predictFlight } from './ball';
+import { BallCam } from './ballcam';
 import { Hud } from './hud';
 import { Input } from './input';
 
-type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number; curl: number };
+type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number; curl: number; follow?: boolean };
 const MAX_QUEUED = 3;
 /** How far (radians) full curl pushes the kick off the line the player faces. */
 const CURL_AIM = 0.4;
@@ -25,6 +26,10 @@ const CURL_AIM = 0.4;
 const CURL_SPIN = 40;
 /** Points in the flight preview line (a fixed count so the line can be updated in place). */
 const AIM_POINTS = 240;
+/** Seconds X can be held before the kick goes anyway. */
+const X_KICK_LIMIT = 3;
+/** Seconds the camera watches the ball after an X kick before going back to the player. */
+const FOLLOW_BALL_TIME = 2;
 
 type Carry =
   | { kind: 'none' }
@@ -68,7 +73,7 @@ export class Match {
    * A kick being powered up. With the controller's X (`PadX`) the left stick sets `curl` from -1
    * (bend left) to 1 (bend right) instead of moving the player.
    */
-  private charge: { key: 'KeyK' | 'KeyL' | 'PadX'; power: number; curl: number } | null = null;
+  private charge: { key: 'KeyK' | 'KeyL' | 'PadX'; power: number; curl: number; held: number } | null = null;
   /** Where an X kick will fly at the current power and curl, and where it will land. */
   private aimLine: BABYLON.Mesh | null = null;
   private aimLanding: BABYLON.Mesh;
@@ -98,6 +103,12 @@ export class Match {
   private moveTime = 0;
   /** Q toggles auto-solo: the player solos by themselves on the last legal step. */
   private autoSolo = false;
+  /** Seconds left of the camera watching the ball's flight after an X kick. */
+  private followBall = 0;
+  /** 0 looks ahead of the player, 1 looks at the ball; eased so the camera doesn't jump. */
+  private ballLook = 0;
+  /** F1: picture-in-picture camera chasing the ball. */
+  private ballCam: BallCam;
   /** Broadcast camera: slide along the sideline, height and zoom. */
   private bcPan = 0;
   private bcHeight = 16;
@@ -150,6 +161,7 @@ export class Match {
     this.aimLanding.material = am;
     this.aimLanding.isPickable = false;
     this.aimLanding.setEnabled(false);
+    this.ballCam = new BallCam(scene, camera, ball);
     hud.setRules(rules);
     hud.setScore(this.home, this.away);
   }
@@ -161,6 +173,7 @@ export class Match {
     if (inp.wasPressed('F12')) this.newGame();
     if (inp.wasPressed('KeyC')) this.broadcastCam = !this.broadcastCam;
     if (inp.wasPressed('KeyV')) this.resetView();
+    if (inp.wasPressed('F1')) this.hud.banner(this.ballCam.toggle() ? 'BALL CAM ON' : 'BALL CAM OFF', 'F1 to toggle', 1.2);
     if (inp.wasPressed('KeyQ')) {
       this.autoSolo = !this.autoSolo;
       this.hud.banner(this.autoSolo ? 'AUTO SOLO ON' : 'AUTO SOLO OFF', this.autoSolo ? `Solo every ${this.rules.maxSteps} steps · Q to turn off` : 'Solo or bounce yourself', 1.6);
@@ -192,6 +205,7 @@ export class Match {
     this.hud.setSteps(inHand ? this.tracker.steps : null, this.rules.maxSteps, this.tracker.canBounce(), this.autoSolo);
     this.hud.setPower(this.charge ? this.charge.power : null, this.charge?.key === 'PadX' ? this.charge.curl : null);
     this.updateBallMarker();
+    this.ballCam.update(dt, this.forward());
     this.hud.update(dt);
     this.prevBall.copyFrom(this.ball.position);
     // Clear this frame's presses, releases, clicks and camera drags so each one acts exactly once.
@@ -348,12 +362,15 @@ export class Match {
       // The controller's X kicks when the ball is in hand (and toe-picks when it's on the ground).
       if (!this.charge) {
         const key = (['KeyK', 'KeyL', 'PadX'] as const).find((k) => inp.wasPressed(k));
-        if (key) this.charge = { key, power: 0, curl: 0 };
+        if (key) this.charge = { key, power: 0, curl: 0, held: 0 };
       }
       if (this.charge) {
         this.charge.power = Math.min(1, this.charge.power + dt * 1.1);
-        if (inp.wasReleased(this.charge.key)) {
-          add({ kind: 'kick', lofted: this.charge.key !== 'KeyL', power: this.charge.power, curl: this.charge.curl });
+        this.charge.held += dt;
+        // An X kick goes by itself once X has been held for X_KICK_LIMIT seconds.
+        const timeUp = this.charge.key === 'PadX' && this.charge.held >= X_KICK_LIMIT;
+        if (inp.wasReleased(this.charge.key) || timeUp) {
+          add({ kind: 'kick', lofted: this.charge.key !== 'KeyL', power: this.charge.power, curl: this.charge.curl, follow: this.charge.key === 'PadX' });
           this.charge = null;
         }
       }
@@ -365,6 +382,7 @@ export class Match {
       if (next?.kind === 'kick') {
         // A tap is a short chip; a full hold reaches about 60 m.
         this.release('kick', 8 + 24 * next.power, next.lofted ? 0.5 : 0.12, next.curl);
+        if (next.follow) this.followBall = FOLLOW_BALL_TIME;
       } else if (next?.kind === 'handPass') {
         this.release('handPass', 13, 0.22);
       } else if (next?.kind === 'bounce') {
@@ -507,7 +525,7 @@ export class Match {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     const pos = this.ball.position;
-    const p = BABYLON.Vector3.Project(pos, BABYLON.Matrix.Identity(), this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(w, h));
+    const p = BABYLON.Vector3.Project(pos, BABYLON.Matrix.Identity(), this.camera.getViewMatrix().multiply(this.camera.getProjectionMatrix()), this.camera.viewport.toGlobal(w, h));
     const view = BABYLON.Vector3.TransformCoordinates(pos, this.camera.getViewMatrix());
     const me = this.player.root.position;
     const dist = Math.hypot(pos.x - me.x, pos.z - me.z);
@@ -629,6 +647,7 @@ export class Match {
   /** Back to kick-off as the page first loaded: scores, clock, rules, cameras, player and ball. */
   private newGame(): void {
     if (this.rules.id !== this.startRules) this.switchRules();
+    this.ballCam.off();
     this.home = emptyScore();
     this.away = emptyScore();
     this.clock = 0;
@@ -646,6 +665,8 @@ export class Match {
     this.sinceLook = 99;
     this.camReturn = false;
     this.moveTime = 0;
+    this.followBall = 0;
+    this.ballLook = 0;
     this.broadcastCam = false;
     this.moveYaw = null;
     this.lastStrike = { method: 'kick', fromX: 0, fromZ: 0 };
@@ -666,7 +687,7 @@ export class Match {
   private applyClick(): void {
     const click = this.input.click;
     if (!click) return;
-    const hit = this.scene.pick(click.x, click.y, (m) => m.name === 'ground');
+    const hit = this.scene.pick(click.x, click.y, (m) => m.name === 'ground', false, this.camera);
     if (!hit?.hit || !hit.pickedPoint) return;
     const me = this.player.root.position;
     const dx = hit.pickedPoint.x - me.x;
@@ -728,12 +749,26 @@ export class Match {
       this.camera.setTarget(new BABYLON.Vector3(me.x, 0, me.z * 0.6));
       this.camera.fov = this.bcFov;
     } else {
+      // After an X kick the camera swings to watch the ball's flight for a couple of seconds.
+      const watching = this.followBall > 0;
+      this.followBall = this.ball.isFree ? Math.max(0, this.followBall - dt) : 0;
+      if (watching && this.followBall === 0) this.camReturn = true;
+      this.ballLook += ((this.followBall > 0 ? 1 : 0) - this.ballLook) * Math.min(1, dt * 4);
+      if (this.followBall > 0) {
+        const to = this.ball.position.subtract(me);
+        if (to.x * to.x + to.z * to.z > 1) {
+          let d = Math.atan2(to.x, to.z) - this.camYaw;
+          d = Math.atan2(Math.sin(d), Math.cos(d));
+          this.camYaw += d * Math.min(1, dt * 4);
+        }
+      }
       const f = new BABYLON.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
       const back = this.camDist * Math.cos(this.camPitch);
       const up = 0.6 + this.camDist * Math.sin(this.camPitch);
       const want = me.subtract(f.scale(back)).add(new BABYLON.Vector3(0, Math.max(0.4, up), 0));
       this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, want, k);
-      this.camera.setTarget(me.add(f.scale(8)).add(new BABYLON.Vector3(0, 1.2, 0)));
+      const ahead = me.add(f.scale(8)).add(new BABYLON.Vector3(0, 1.2, 0));
+      this.camera.setTarget(this.ballLook > 0.01 ? BABYLON.Vector3.Lerp(ahead, this.ball.position, this.ballLook) : ahead);
       this.camera.fov = 0.9;
     }
   }
