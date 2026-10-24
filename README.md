@@ -32,8 +32,11 @@ Add `?rules=2025` to the URL to start with the 2025 rules, or press **R** in gam
 | J | Hand-pass |
 | K (hold) | Lofted kick, hold longer for more power |
 | L (hold) | Low drilled kick, for goal shots |
-| E | Toe-pick a ball on the ground |
+| E | Toe-pick a ball on the ground into your hands (within about 2 m; press it just before you reach the ball) |
 | G | Pick up with the hands (a foul, to show the rule) |
+| Mouse drag | Pan the camera (finger drag on the pitch on touch screens) |
+| Mouse wheel | Zoom the camera |
+| V | Reset the camera view |
 | C | Switch between the behind-the-player and broadcast cameras |
 | R | Switch between classic and 2025 rules |
 

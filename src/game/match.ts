@@ -24,10 +24,13 @@ type Carry =
 const STRIDE = 1.5; // metres per foot plant
 const JOG = 5.5;
 const SPRINT = 8;
-const MOVE_DURATION = { bounce: 0.42, solo: 0.45, toePick: 0.4 } as const;
+const MOVE_DURATION = { bounce: 0.42, solo: 0.45, toePick: 0.55 } as const;
+/** How close a ball on the ground has to be for E to toe-pick it, in metres. */
+const TOE_PICK_REACH = 2.2;
 
 const L_HANDS = PlayerFigure.CARRY_OFFSET;
 const L_FOOT = new BABYLON.Vector3(0.1, 0.32, 0.55);
+const L_TOE_LIFT = new BABYLON.Vector3(0.08, 0.6, 0.45);
 const L_BOUNCE = new BABYLON.Vector3(0, BALL_RADIUS, 0.95);
 
 /**
@@ -48,6 +51,19 @@ export class Match {
   private pendingHandPass = false;
   /** Direction the behind-the-player camera looks. Movement keys are relative to it. */
   private camYaw = 0;
+  /** E pressed a moment before reaching the ball still counts, so the pick-up isn't missed at a run. */
+  private toePickBuffer = 0;
+  /** Where the player steps to stand over the ball during a toe-pick. */
+  private pickSpot: BABYLON.Vector3 | null = null;
+  /** Camera angle above the horizontal and distance from the player, set by dragging and the wheel. */
+  private camPitch = 0.33;
+  private camDist = 6.5;
+  /** Seconds since the player last moved the camera by hand; the camera won't swing round for a moment after. */
+  private sinceLook = 99;
+  /** Broadcast camera: slide along the sideline, height and zoom. */
+  private bcPan = 0;
+  private bcHeight = 16;
+  private bcFov = 0.5;
   private actionPose: { pose: PoseName; t: number } | null = null;
   private deadTime = 0;
   private sinceRelease = 0;
@@ -90,6 +106,8 @@ export class Match {
       this.hud.banner(this.rules.name.toUpperCase(), this.rules.twoPointArcRadius ? 'Two-point arc, kick-outs past the 40 m arc, 3 up and 4 back' : 'Goals 3, points 1, no arc', 2);
     }
     if (inp.wasPressed('KeyC')) this.broadcastCam = !this.broadcastCam;
+    if (inp.wasPressed('KeyV')) this.resetView();
+    this.applyLook(dt);
 
     if (this.deadTime > 0) {
       this.deadTime -= dt;
@@ -152,9 +170,15 @@ export class Match {
       const away = Math.max(0, BABYLON.Vector3.Dot(want, f));
       let camDiff = root.rotation.y - this.camYaw;
       camDiff = Math.atan2(Math.sin(camDiff), Math.cos(camDiff));
-      this.camYaw += camDiff * Math.min(1, dt * 1.6 * away);
+      if (this.sinceLook > 1.5) this.camYaw += camDiff * Math.min(1, dt * 1.6 * away);
     }
-    root.position.addInPlace(this.forward().scale(this.speed * dt));
+    if (this.carry.kind === 'toePick' && this.pickSpot) {
+      // Step in over the ball rather than running past it.
+      this.speed *= Math.max(0, 1 - dt * 8);
+      root.position = BABYLON.Vector3.Lerp(root.position, this.pickSpot, Math.min(1, dt * 12));
+    } else {
+      root.position.addInPlace(this.forward().scale(this.speed * dt));
+    }
     root.position.x = BABYLON.Scalar.Clamp(root.position.x, -HL - 3, HL + 3);
     root.position.z = BABYLON.Scalar.Clamp(root.position.z, -HW - 3, HW + 3);
 
@@ -173,6 +197,8 @@ export class Match {
       this.actionPose.t -= dt;
       this.player.pose(this.actionPose.pose);
       if (this.actionPose.t <= 0) this.actionPose = null;
+    } else if (this.carry.kind === 'toePick') {
+      this.player.pose('toePick');
     } else if (this.speed > 0.3) {
       this.player.pose(this.carry.kind === 'hand' ? 'carry' : 'run', this.phase);
     } else {
@@ -234,18 +260,33 @@ export class Match {
         return;
       }
       const onGround = p.y < 0.35;
-      if (onGround && flat < 1.4 && speed < 7) {
-        this.hud.setPrompt('E  toe-pick   ·   G  pick up with hands (foul)');
-        if (inp.wasPressed('KeyE')) {
-          this.carry = { kind: 'toePick', t: 0, from: p.clone() };
-          this.hud.setPrompt('');
-        } else if (inp.wasPressed('KeyG')) {
-          this.foul('Free out', 'The ball can’t be picked off the ground with the hands. Use a toe-pick.');
-        }
-      } else {
-        this.hud.setPrompt('');
+      this.toePickBuffer = inp.wasPressed('KeyE') ? 0.5 : Math.max(0, this.toePickBuffer - dt);
+      if (onGround && flat < TOE_PICK_REACH && speed < 9 && this.toePickBuffer > 0) {
+        this.startToePick(p);
+        return;
       }
+      if (onGround && flat < TOE_PICK_REACH && inp.wasPressed('KeyG')) {
+        this.foul('Free out', 'The ball can’t be picked off the ground with the hands. Use a toe-pick.');
+        return;
+      }
+      this.hud.setPrompt(onGround && flat < 6 ? 'E  toe-pick the ball into your hands' : '');
     }
+  }
+
+  /** Turn to the ball, step over it and flick it up off the toe into the hands. */
+  private startToePick(ballPos: BABYLON.Vector3): void {
+    const root = this.player.root;
+    const dir = new BABYLON.Vector3(ballPos.x - root.position.x, 0, ballPos.z - root.position.z);
+    if (dir.lengthSquared() > 1e-4) {
+      dir.normalize();
+      root.rotation.y = Math.atan2(dir.x, dir.z);
+    } else {
+      dir.copyFrom(this.forward());
+    }
+    this.pickSpot = new BABYLON.Vector3(ballPos.x - dir.x * 0.5, 0, ballPos.z - dir.z * 0.5);
+    this.carry = { kind: 'toePick', t: 0, from: new BABYLON.Vector3(ballPos.x, BALL_RADIUS, ballPos.z) };
+    this.toePickBuffer = 0;
+    this.hud.setPrompt('');
   }
 
   /** Kick or hand-pass the ball. `loft` is the launch angle in radians. */
@@ -344,31 +385,66 @@ export class Match {
       const foot = this.toWorld(L_FOOT);
       pos = u < 0.45 ? BABYLON.Vector3.Lerp(hands, foot, (u / 0.45) ** 2) : BABYLON.Vector3.Lerp(foot, hands, Math.sqrt((u - 0.45) / 0.55));
     } else {
-      const foot = this.toWorld(L_FOOT);
-      pos = u < 0.4 ? BABYLON.Vector3.Lerp(c.from, foot, u / 0.4) : BABYLON.Vector3.Lerp(foot, hands, (u - 0.4) / 0.6);
+      // Toe-pick: the ball waits on the grass while the player steps in, pops up off the toe, then into the hands.
+      const lift = this.toWorld(L_TOE_LIFT);
+      if (u < 0.35) pos = c.from;
+      else if (u < 0.65) pos = BABYLON.Vector3.Lerp(c.from, lift, Math.sqrt((u - 0.35) / 0.3));
+      else pos = BABYLON.Vector3.Lerp(lift, hands, (u - 0.65) / 0.35);
     }
     this.ball.hold(pos);
     if (u >= 1) {
-      if (c.kind === 'toePick') this.tracker.start('pickup');
+      if (c.kind === 'toePick') {
+        this.tracker.start('pickup');
+        this.pickSpot = null;
+      }
       this.carry = { kind: 'hand' };
     }
   }
 
+  private applyLook(dt: number): void {
+    const { dx, dy, zoom } = this.input.look;
+    this.sinceLook += dt;
+    if (dx === 0 && dy === 0 && zoom === 0) return;
+    this.sinceLook = 0;
+    if (this.broadcastCam) {
+      this.bcPan = BABYLON.Scalar.Clamp(this.bcPan - dx * 0.08, -70, 70);
+      this.bcHeight = BABYLON.Scalar.Clamp(this.bcHeight + dy * 0.05, 4, 45);
+      this.bcFov = BABYLON.Scalar.Clamp(this.bcFov + zoom * 0.04, 0.25, 1.0);
+    } else {
+      this.camYaw += dx * 0.006;
+      this.camPitch = BABYLON.Scalar.Clamp(this.camPitch + dy * 0.004, 0.05, 1.3);
+      this.camDist = BABYLON.Scalar.Clamp(this.camDist + zoom * 0.8, 3, 18);
+    }
+  }
+
+  private resetView(): void {
+    this.camYaw = this.player.root.rotation.y;
+    this.camPitch = 0.33;
+    this.camDist = 6.5;
+    this.bcPan = 0;
+    this.bcHeight = 16;
+    this.bcFov = 0.5;
+  }
+
   private updateCamera(dt: number): void {
     const me = this.player.root.position;
-    const k = Math.min(1, dt * 4);
+    // Follow smoothly, but keep up closely while the camera is being dragged.
+    const k = Math.min(1, dt * (this.sinceLook < 0.3 ? 14 : 4));
     if (this.broadcastCam) {
       this.camYaw = this.player.root.rotation.y;
-      const want = new BABYLON.Vector3(me.x * 0.85, 16, -HW - 18);
+      const want = new BABYLON.Vector3(me.x * 0.85 + this.bcPan, this.bcHeight, -HW - 18);
       this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, want, k);
       this.camera.setTarget(new BABYLON.Vector3(me.x, 0, me.z * 0.6));
-      this.camera.fov = 0.5;
+      this.camera.fov = this.bcFov;
     } else {
       const f = new BABYLON.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
-      const want = me.subtract(f.scale(6.5)).add(new BABYLON.Vector3(0, 2.6, 0));
+      const back = this.camDist * Math.cos(this.camPitch);
+      const up = 0.6 + this.camDist * Math.sin(this.camPitch);
+      const want = me.subtract(f.scale(back)).add(new BABYLON.Vector3(0, Math.max(0.4, up), 0));
       this.camera.position = BABYLON.Vector3.Lerp(this.camera.position, want, k);
       this.camera.setTarget(me.add(f.scale(8)).add(new BABYLON.Vector3(0, 1.2, 0)));
       this.camera.fov = 0.9;
     }
   }
+
 }

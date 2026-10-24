@@ -17,7 +17,7 @@ export const KITS = {
   kilcarraKeeper: { jersey: '#f2d43a', shorts: '#111111', socks: '#111111', band: null, numberColour: '#111111' },
 } satisfies Record<string, Kit>;
 
-export type PoseName = 'stand' | 'run' | 'carry' | 'kick' | 'handPass' | 'jump' | 'keeper';
+export type PoseName = 'stand' | 'run' | 'carry' | 'kick' | 'handPass' | 'jump' | 'keeper' | 'toePick';
 
 /** Greybox player: a jointed capsule figure. Stands in until rigged glTF characters arrive. */
 export class PlayerFigure {
@@ -144,6 +144,13 @@ export class PlayerFigure {
         this.hips.rotation.x = -0.12;
         set('rThigh', -1.45); set('rShin', 0.15); set('lThigh', 0.2); set('lShin', 0.3);
         set('lArm', -0.3, -1.0); set('rArm', 0.5, 0.6); set('lFore', -0.4); set('rFore', -0.6);
+        break;
+      case 'toePick':
+        // Lean over the ball, toe under it, hands down ready to take it.
+        this.hips.rotation.x = 0.45;
+        this.hips.position.y = 0.9;
+        set('rThigh', -0.75); set('rShin', 0.25); set('lThigh', 0.15); set('lShin', 0.45);
+        set('lArm', -0.9, -0.15); set('rArm', -0.9, 0.15); set('lFore', -0.3); set('rFore', -0.3);
         break;
       case 'handPass':
         this.hips.rotation.x = 0.1;

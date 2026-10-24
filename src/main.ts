@@ -76,6 +76,7 @@ async function start(): Promise<void> {
     return rules;
   };
   const input = new Input();
+  input.attachLook(canvas);
   if (touch) {
     document.body.classList.add('touch-mode');
     createTouchControls(input, document.getElementById('hud')!);
