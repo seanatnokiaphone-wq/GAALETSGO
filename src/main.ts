@@ -19,9 +19,10 @@ const LINE_UP: [number, number][] = [
   [-8, -8], [-6, 8], [22, -22], [20, 0], [22, 22], [48, -16], [52, 0], [48, 16],
 ];
 
-const PAD_HELP = `<b>Left stick</b> move · <b>RB</b> sprint · <b>Right stick</b> camera<br />
-  <b>A</b> hand-pass · <b>B</b> solo · <b>LT</b> bounce · <b>X</b> toe-pick<br />
-  <b>Y</b> hold for a lofted kick · <b>RT</b> hold for a low kick<br />
+const PAD_HELP = `<b>Left stick</b> move · <b>RB</b> sprint<br />
+  <b>A</b> hand-pass · <b>B</b> or <b>RT</b> solo · <b>LT</b> bounce · <b>X</b> toe-pick off the grass<br />
+  <b>X</b> hold to kick from the hands: power bar, <b>left stick</b> ◀ ▶ curls it<br />
+  <b>Y</b> hold for a lofted kick · <b>Right stick</b> look around, let go to snap back<br />
   <b>View</b> camera · <b>LB</b> reset view · <b>R3</b> rules · <b>Menu</b> new game`;
 
 async function start(): Promise<void> {

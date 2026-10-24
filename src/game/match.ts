@@ -13,12 +13,18 @@ import {
   type TeamScore,
 } from '../rules';
 import { PlayerFigure, type PoseName } from '../scene/player';
-import { BALL_RADIUS, Ball } from './ball';
+import { BALL_RADIUS, Ball, predictFlight } from './ball';
 import { Hud } from './hud';
 import { Input } from './input';
 
-type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number };
+type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number; curl: number };
 const MAX_QUEUED = 3;
+/** How far (radians) full curl pushes the kick off the line the player faces. */
+const CURL_AIM = 0.12;
+/** Sidespin (rad/s) at full curl; with the Magnus force it bends a long kick about 5 m. */
+const CURL_SPIN = 30;
+/** Points in the flight preview line (a fixed count so the line can be updated in place). */
+const AIM_POINTS = 240;
 
 type Carry =
   | { kind: 'none' }
@@ -28,12 +34,12 @@ type Carry =
 const STRIDE = 1.5; // metres per foot plant
 const JOG = 5.5;
 const SPRINT = 8;
-const MOVE_DURATION = { bounce: 0.42, solo: 0.45, toePick: 0.55 } as const;
+const MOVE_DURATION = { bounce: 0.42, solo: 0.55, toePick: 0.55 } as const;
 /** How close a ball on the ground has to be for E to toe-pick it, in metres. */
 const TOE_PICK_REACH = 2.2;
 
 const L_HANDS = PlayerFigure.CARRY_OFFSET;
-const L_FOOT = new BABYLON.Vector3(0.1, 0.32, 0.55);
+const L_FOOT = new BABYLON.Vector3(0.1, 0.36, 0.56);
 const L_TOE_LIFT = new BABYLON.Vector3(0.08, 0.6, 0.45);
 const L_BOUNCE = new BABYLON.Vector3(0, BALL_RADIUS, 0.95);
 
@@ -49,8 +55,14 @@ export class Match {
   private clock = 0;
   private phase = 0;
   private speed = 0;
-  /** A kick being powered up. `fire` is set if the key was let go mid-solo or mid-bounce. */
-  private charge: { key: 'KeyK' | 'KeyL'; power: number; fire: boolean } | null = null;
+  /**
+   * A kick being powered up. With the controller's X (`PadX`) the left stick sets `curl` from -1
+   * (bend left) to 1 (bend right) instead of moving the player.
+   */
+  private charge: { key: 'KeyK' | 'KeyL' | 'PadX'; power: number; curl: number } | null = null;
+  /** Where an X kick will fly at the current power and curl, and where it will land. */
+  private aimLine: BABYLON.Mesh | null = null;
+  private aimLanding: BABYLON.Mesh;
   /**
    * Actions pressed while another is still playing (a solo, a bounce, a toe-pick). Each press is one
    * action, and they play one after another in the order pressed, never two at once.
@@ -71,6 +83,8 @@ export class Match {
   private camDist = 6.5;
   /** Seconds since the player last moved the camera by hand; the camera won't swing round for a moment after. */
   private sinceLook = 99;
+  /** Set by a right-stick pan: once the stick is let go the camera eases back behind the player. */
+  private camReturn = false;
   /** Broadcast camera: slide along the sideline, height and zoom. */
   private bcPan = 0;
   private bcHeight = 16;
@@ -116,6 +130,13 @@ export class Match {
     this.clickMarker.material = cm;
     this.clickMarker.isPickable = false;
     this.clickMarker.setEnabled(false);
+    this.aimLanding = BABYLON.MeshBuilder.CreateTorus('aimLanding', { diameter: 1.6, thickness: 0.1, tessellation: 32 }, scene);
+    const am = new BABYLON.StandardMaterial('aimLandingMat', scene);
+    am.emissiveColor = new BABYLON.Color3(0.95, 0.76, 0.18);
+    am.disableLighting = true;
+    this.aimLanding.material = am;
+    this.aimLanding.isPickable = false;
+    this.aimLanding.setEnabled(false);
     hud.setRules(rules);
     hud.setScore(this.home, this.away);
   }
@@ -137,6 +158,7 @@ export class Match {
       this.clock += dt;
       this.movePlayer(dt);
       this.handleBall(dt);
+      this.updateAim();
     }
 
     this.poseBallInHand(dt);
@@ -151,7 +173,8 @@ export class Match {
     this.hud.setClock(this.clock);
     const inHand = this.carry.kind === 'hand' || this.carry.kind === 'bounce' || this.carry.kind === 'solo';
     this.hud.setSteps(inHand ? this.tracker.steps : null, this.rules.maxSteps, this.tracker.canBounce());
-    this.hud.setPower(this.charge ? this.charge.power : null);
+    this.hud.setPower(this.charge ? this.charge.power : null, this.charge?.key === 'PadX' ? this.charge.curl : null);
+    this.updateBallMarker();
     this.hud.update(dt);
     this.prevBall.copyFrom(this.ball.position);
     // Clear this frame's presses, releases, clicks and camera drags so each one acts exactly once.
@@ -174,6 +197,7 @@ export class Match {
     // panning the camera (right stick, mouse) or the camera swinging round never bends the player's run:
     // the player always faces where the left stick points.
     const key = (a: string, b: string) => inp.isDown(a) || inp.isDown(b);
+    if (this.charge?.key === 'PadX') return this.aimKick(dt);
     const stickLen = Math.hypot(inp.stick.x, inp.stick.y);
     const steering = stickLen > 0.15 || key('KeyW', 'ArrowUp') || key('KeyS', 'ArrowDown') || key('KeyA', 'ArrowLeft') || key('KeyD', 'ArrowRight');
     if (!steering) this.moveYaw = null;
@@ -226,6 +250,27 @@ export class Match {
     root.position.x = BABYLON.Scalar.Clamp(root.position.x, -HL - 3, HL + 3);
     root.position.z = BABYLON.Scalar.Clamp(root.position.z, -HW - 3, HW + 3);
 
+    this.stepAndPose(dt);
+  }
+
+  /**
+   * While X is held for a kick the player plants to strike: they ease to a stop, keep facing the same
+   * way, and the left stick's left/right sets the curl.
+   */
+  private aimKick(dt: number): void {
+    const c = this.charge!;
+    this.moveYaw = null;
+    this.faceYaw = null;
+    const want = Math.abs(this.input.stick.x) > 0.15 ? BABYLON.Scalar.Clamp(this.input.stick.x, -1, 1) : 0;
+    c.curl += (want - c.curl) * Math.min(1, dt * 8);
+    this.speed *= Math.max(0, 1 - dt * 5);
+    if (this.speed < 0.05) this.speed = 0;
+    const root = this.player.root;
+    root.position.addInPlace(this.forward().scale(this.speed * dt));
+    this.stepAndPose(dt);
+  }
+
+  private stepAndPose(dt: number): void {
     // Each half run cycle is one foot plant.
     const before = Math.floor(this.phase / Math.PI);
     this.phase += ((this.speed * dt) / STRIDE) * Math.PI;
@@ -243,6 +288,9 @@ export class Match {
       if (this.actionPose.t <= 0) this.actionPose = null;
     } else if (this.carry.kind === 'toePick') {
       this.player.pose('toePick');
+    } else if (this.carry.kind === 'solo') {
+      // The ball drops onto the right toe and is kicked back up to the hands.
+      this.player.pose('solo', Math.min(1, this.carry.t / MOVE_DURATION.solo));
     } else if (this.speed > 0.3) {
       this.player.pose(this.carry.kind === 'hand' ? 'carry' : 'run', this.phase);
     } else {
@@ -255,6 +303,8 @@ export class Match {
     const c = this.carry;
 
     const holding = c.kind === 'hand' || c.kind === 'bounce' || c.kind === 'solo' || c.kind === 'toePick';
+    // A kick still charging when the ball goes (a queued hand-pass) is dropped.
+    if (!holding) this.charge = null;
     if (holding) {
       const add = (a: QueuedAction) => {
         if (this.queue.length < MAX_QUEUED) this.queue.push(a);
@@ -263,13 +313,15 @@ export class Match {
       if (inp.wasPressed('KeyB')) add({ kind: 'bounce' });
       if (inp.wasPressed('KeyJ')) add({ kind: 'handPass' });
       // Kicks power up while the key is held and join the queue when it is let go.
-      if (!this.charge && (inp.wasPressed('KeyK') || inp.wasPressed('KeyL'))) {
-        this.charge = { key: inp.wasPressed('KeyK') ? 'KeyK' : 'KeyL', power: 0, fire: false };
+      // The controller's X kicks when the ball is in hand (and toe-picks when it's on the ground).
+      if (!this.charge) {
+        const key = (['KeyK', 'KeyL', 'PadX'] as const).find((k) => inp.wasPressed(k));
+        if (key) this.charge = { key, power: 0, curl: 0 };
       }
       if (this.charge) {
         this.charge.power = Math.min(1, this.charge.power + dt * 1.1);
         if (inp.wasReleased(this.charge.key)) {
-          add({ kind: 'kick', lofted: this.charge.key === 'KeyK', power: this.charge.power });
+          add({ kind: 'kick', lofted: this.charge.key !== 'KeyL', power: this.charge.power, curl: this.charge.curl });
           this.charge = null;
         }
       }
@@ -280,7 +332,7 @@ export class Match {
       const next = this.queue.shift();
       if (next?.kind === 'kick') {
         // A tap is a short chip; a full hold reaches about 60 m.
-        this.release('kick', 8 + 24 * next.power, next.lofted ? 0.5 : 0.12);
+        this.release('kick', 8 + 24 * next.power, next.lofted ? 0.5 : 0.12, next.curl);
       } else if (next?.kind === 'handPass') {
         this.release('handPass', 13, 0.22);
       } else if (next?.kind === 'bounce') {
@@ -311,7 +363,7 @@ export class Match {
         return;
       }
       const onGround = p.y < 0.35;
-      this.toePickBuffer = inp.wasPressed('KeyE') ? 0.5 : Math.max(0, this.toePickBuffer - dt);
+      this.toePickBuffer = inp.wasPressed('KeyE') || inp.wasPressed('PadX') ? 0.5 : Math.max(0, this.toePickBuffer - dt);
       if (onGround && flat < TOE_PICK_REACH && speed < 9 && this.toePickBuffer > 0) {
         this.startToePick(p);
         return;
@@ -320,7 +372,7 @@ export class Match {
         this.foul('Free out', 'The ball can’t be picked off the ground with the hands. Use a toe-pick.');
         return;
       }
-      this.hud.setPrompt(onGround && flat < 6 ? 'E  toe-pick the ball into your hands' : '');
+      this.hud.setPrompt(onGround && flat < 6 ? `${inp.usingPad ? 'X' : 'E'}  toe-pick the ball into your hands` : '');
     }
   }
 
@@ -340,13 +392,26 @@ export class Match {
     this.hud.setPrompt('');
   }
 
-  /** Kick or hand-pass the ball. `loft` is the launch angle in radians. */
-  private release(method: ShotMethod, speed: number, loft: number): void {
+  /**
+   * Where the ball leaves the player and how. `loft` is the launch angle in radians; `curl` from -1 to 1
+   * starts the ball a little to that side and spins it so it keeps bending that way.
+   */
+  private launchState(method: ShotMethod, speed: number, loft: number, curl = 0) {
     const f = this.forward();
+    const yaw = this.player.root.rotation.y + curl * CURL_AIM;
+    const aim = new BABYLON.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const from = method === 'kick' ? this.toWorld(new BABYLON.Vector3(0, 0.45, 0.6)) : this.toWorld(L_HANDS);
-    const v = f.scale(speed * Math.cos(loft)).add(new BABYLON.Vector3(0, speed * Math.sin(loft), 0)).add(f.scale(this.speed * 0.4));
-    // Backspin on a kick, about the axis across the ball's flight.
-    const spin = BABYLON.Vector3.Cross(f, BABYLON.Vector3.Up()).scale(method === 'kick' ? 6 : 1);
+    const v = aim.scale(speed * Math.cos(loft)).add(new BABYLON.Vector3(0, speed * Math.sin(loft), 0)).add(f.scale(this.speed * 0.4));
+    // Backspin on a kick, about the axis across the ball's flight, plus sidespin for curl
+    // (spin about +y bends the ball to the right).
+    const spin = BABYLON.Vector3.Cross(aim, BABYLON.Vector3.Up()).scale(method === 'kick' ? 6 : 1);
+    spin.y += curl * CURL_SPIN;
+    return { from, v, spin };
+  }
+
+  /** Kick or hand-pass the ball. */
+  private release(method: ShotMethod, speed: number, loft: number, curl = 0): void {
+    const { from, v, spin } = this.launchState(method, speed, loft, curl);
     this.ball.hold(from);
     this.ball.launch(v, spin);
     this.carry = { kind: 'none' };
@@ -397,6 +462,69 @@ export class Match {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Points out the ball whenever it isn't in the player's hands: a marker over it on screen, or an
+   * arrow at the screen edge pointing towards it, with the distance.
+   */
+  private updateBallMarker(): void {
+    const c = this.carry.kind;
+    if (c === 'hand' || c === 'solo' || c === 'bounce') return this.hud.setBallMarker(null);
+    const canvas = this.scene.getEngine().getRenderingCanvas()!;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const pos = this.ball.position;
+    const p = BABYLON.Vector3.Project(pos, BABYLON.Matrix.Identity(), this.scene.getTransformMatrix(), this.camera.viewport.toGlobal(w, h));
+    const view = BABYLON.Vector3.TransformCoordinates(pos, this.camera.getViewMatrix());
+    const me = this.player.root.position;
+    const dist = Math.hypot(pos.x - me.x, pos.z - me.z);
+    const pad = 36;
+    if (view.z > 0 && p.x > pad && p.x < w - pad && p.y > pad && p.y < h - pad) {
+      return this.hud.setBallMarker({ x: p.x, y: p.y, edge: false, angle: 0, dist });
+    }
+    // Off screen: point from the screen centre the way the ball lies from the camera (right, left, up,
+    // or down for behind), and pin the arrow where that line meets the screen edge.
+    const cx = w / 2;
+    const cy = h / 2;
+    let dx = view.x;
+    let dy = -view.y;
+    if (Math.hypot(dx, dy) < 1e-3) dy = 1;
+    // Leave room under a bottom-edge arrow for its distance label.
+    const room = dy > 0 ? cy - pad - 20 : cy - pad;
+    const scale = Math.min((cx - pad) / Math.max(1e-3, Math.abs(dx)), room / Math.max(1e-3, Math.abs(dy)));
+    dx *= scale;
+    dy *= scale;
+    this.hud.setBallMarker({ x: cx + dx, y: cy + dy, edge: true, angle: Math.atan2(dy, dx), dist });
+  }
+
+  /** Draws the flight of an X kick at its current power and curl while it charges. */
+  private updateAim(): void {
+    const c = this.charge;
+    if (!c || c.key !== 'PadX' || this.deadTime > 0) {
+      this.aimLine?.setEnabled(false);
+      this.aimLanding.setEnabled(false);
+      return;
+    }
+    const { from, v, spin } = this.launchState('kick', 8 + 24 * c.power, 0.5, c.curl);
+    const path = predictFlight(from, v, spin, AIM_POINTS / 60);
+    const landing = path[path.length - 1];
+    const points = Array.from({ length: AIM_POINTS }, (_, i) => path[Math.min(i, path.length - 1)]);
+    // A thin tube rather than a line, so it stays visible at a distance and on high-DPI screens.
+    if (!this.aimLine) {
+      this.aimLine = BABYLON.MeshBuilder.CreateTube('aimLine', { path: points, radius: 0.05, tessellation: 6, updatable: true }, this.scene);
+      const m = new BABYLON.StandardMaterial('aimLineMat', this.scene);
+      m.emissiveColor = new BABYLON.Color3(0.95, 0.76, 0.18);
+      m.disableLighting = true;
+      m.alpha = 0.75;
+      this.aimLine.material = m;
+      this.aimLine.isPickable = false;
+    } else {
+      BABYLON.MeshBuilder.CreateTube('aimLine', { path: points, radius: 0.05, instance: this.aimLine });
+    }
+    this.aimLine.setEnabled(true);
+    this.aimLanding.position.set(landing.x, 0.04, landing.z);
+    this.aimLanding.setEnabled(true);
   }
 
   private foul(title: string, detail: string): void {
@@ -479,6 +607,7 @@ export class Match {
     this.faceYaw = null;
     this.sinceRelease = 0;
     this.sinceLook = 99;
+    this.camReturn = false;
     this.broadcastCam = false;
     this.moveYaw = null;
     this.lastStrike = { method: 'kick', fromX: 0, fromZ: 0 };
@@ -514,8 +643,12 @@ export class Match {
   private applyLook(dt: number): void {
     const { dx, dy, zoom } = this.input.look;
     this.sinceLook += dt;
+    if (this.input.rightStickHeld) this.camReturn = !this.broadcastCam;
+    else if (this.camReturn) this.returnCamera(dt);
     if (dx === 0 && dy === 0 && zoom === 0) return;
     this.sinceLook = 0;
+    // A mouse or touch drag stays where it's put.
+    if (!this.input.rightStickHeld) this.camReturn = false;
     if (this.broadcastCam) {
       this.bcPan = BABYLON.Scalar.Clamp(this.bcPan - dx * 0.08, -70, 70);
       this.bcHeight = BABYLON.Scalar.Clamp(this.bcHeight + dy * 0.05, 4, 45);
@@ -525,6 +658,16 @@ export class Match {
       this.camPitch = BABYLON.Scalar.Clamp(this.camPitch + dy * 0.004, 0.05, 1.3);
       this.camDist = BABYLON.Scalar.Clamp(this.camDist + zoom * 0.8, 3, 18);
     }
+  }
+
+  /** Swing the camera back to its usual spot behind the player after a right-stick pan. */
+  private returnCamera(dt: number): void {
+    let d = this.player.root.rotation.y - this.camYaw;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    const k = Math.min(1, dt * 5);
+    this.camYaw += d * k;
+    this.camPitch += (0.33 - this.camPitch) * k;
+    if (Math.abs(d) < 0.01 && Math.abs(this.camPitch - 0.33) < 0.01) this.camReturn = false;
   }
 
   private resetView(): void {

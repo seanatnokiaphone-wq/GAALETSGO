@@ -49,14 +49,14 @@ Plug in or pair a controller and press any button; the help panel switches to th
 | Button | Action |
 | --- | --- |
 | Left stick / d-pad | Move |
-| Right stick | Camera |
+| Right stick | Look around; the camera goes back behind the player when you let go |
 | RB or left stick click | Sprint |
 | A | Hand-pass |
-| B | Solo |
+| B or RT | Solo (drop the ball onto the toe and back to the hands) |
 | LT | Bounce |
-| X | Toe-pick |
+| X, ball on the grass | Toe-pick |
+| X (hold), ball in hand | Kick: the bar fills for height and distance, the left stick left or right curls it, and a line shows where it will land |
 | Y (hold) | Lofted kick |
-| RT (hold) | Low kick |
 | View | Switch camera |
 | LB | Reset camera view |
 | Right stick click | Switch rules |

@@ -17,7 +17,7 @@ export const KITS = {
   kilcarraKeeper: { jersey: '#f2d43a', shorts: '#111111', socks: '#111111', band: null, numberColour: '#111111' },
 } satisfies Record<string, Kit>;
 
-export type PoseName = 'stand' | 'run' | 'carry' | 'kick' | 'handPass' | 'jump' | 'keeper' | 'toePick';
+export type PoseName = 'stand' | 'run' | 'carry' | 'kick' | 'handPass' | 'jump' | 'keeper' | 'toePick' | 'solo';
 
 /** Greybox player: a jointed capsule figure. Stands in until rigged glTF characters arrive. */
 export class PlayerFigure {
@@ -112,7 +112,8 @@ export class PlayerFigure {
     this.root.rotation.y = Math.atan2(fx - x, fz - z);
   }
 
-  /** Procedural pose. `phase` is the run-cycle angle in radians. Negative x rotation swings a limb forward. */
+  /**
+   * Procedural pose. `phase` is the run-cycle angle in radians (for 'solo', the move's progress 0 to 1). Negative x rotation swings a limb forward. */
   pose(name: PoseName, phase = 0): void {
     const j = this.joints;
     const set = (k: keyof typeof j, x: number, z = 0) => {
@@ -152,6 +153,15 @@ export class PlayerFigure {
         set('rThigh', -0.75); set('rShin', 0.25); set('lThigh', 0.15); set('lShin', 0.45);
         set('lArm', -0.9, -0.15); set('rArm', -0.9, 0.15); set('lFore', -0.3); set('rFore', -0.3);
         break;
+      case 'solo': {
+        // Drop the ball, swing the right leg up to meet it on the toe, and take it back in the hands.
+        const w = Math.sin(Math.PI * BABYLON.Scalar.Clamp((phase - 0.1) / 0.7, 0, 1));
+        this.hips.rotation.x = 0.1 - 0.12 * w;
+        set('rThigh', -0.95 * w); set('rShin', 0.2 + 0.4 * w); set('lThigh', 0.15 * w); set('lShin', 0.2 + 0.15 * w);
+        set('lArm', -0.5 - 0.3 * w, -0.25); set('rArm', -0.5 - 0.3 * w, 0.25);
+        set('lFore', -1.25 + 0.6 * w, 0.5); set('rFore', -1.25 + 0.6 * w, -0.5);
+        break;
+      }
       case 'handPass':
         this.hips.rotation.x = 0.1;
         set('lThigh', -0.5); set('rThigh', 0.35); set('lShin', 0.4); set('rShin', 0.5);

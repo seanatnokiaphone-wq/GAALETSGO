@@ -40,10 +40,31 @@ export class Hud {
     p.hidden = text === '';
   }
 
-  setPower(power: number | null): void {
+  /** Kick power 0 to 1 (null hides the bar), and curl from -1 (left) to 1 (right) for a kick that bends. */
+  setPower(power: number | null, curl: number | null = null): void {
     const bar = this.el('power');
     bar.hidden = power === null;
     if (power !== null) (bar.firstElementChild as HTMLElement).style.width = `${Math.round(power * 100)}%`;
+    const meter = this.el('curl');
+    meter.hidden = power === null || curl === null;
+    if (power === null || curl === null) return;
+    (meter.querySelector('b') as HTMLElement).style.left = `${50 + curl * 50}%`;
+    const side = Math.abs(curl) < 0.1 ? 'STRAIGHT' : `${curl < 0 ? '◀ LEFT' : 'RIGHT ▶'} ${Math.round(Math.abs(curl) * 100)}%`;
+    this.el('curl-label').textContent = `CURL ${side}`;
+  }
+
+  /**
+   * The ball marker: over the ball when it's on screen, or at the screen edge with an arrow pointing to
+   * it (angle in radians, screen axes) when it isn't. null hides it.
+   */
+  setBallMarker(m: { x: number; y: number; edge: boolean; angle: number; dist: number } | null): void {
+    const el = this.el('ballmark');
+    el.hidden = m === null;
+    if (!m) return;
+    el.classList.toggle('edge', m.edge);
+    el.style.transform = `translate(${m.x.toFixed(1)}px, ${m.y.toFixed(1)}px)`;
+    (el.querySelector('i') as HTMLElement).style.transform = m.edge ? `rotate(${m.angle.toFixed(3)}rad)` : '';
+    (el.querySelector('span') as HTMLElement).textContent = `${Math.round(m.dist)} m`;
   }
 
   banner(title: string, sub = '', seconds = 2.2): void {

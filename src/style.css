@@ -26,6 +26,11 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .power { height: 8px; background: #2a3a30; margin-top: 10px; }
 .power[hidden] { display: none; }
 .power i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #4fd27a, #f2c12e, #ff6b3d); }
+.curl { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 11px; letter-spacing: 0.1em; color: #c8d6cc; }
+.curl[hidden] { display: none; }
+.curl .track { position: relative; flex: 1; height: 6px; background: #2a3a30; }
+.curl .track::after { content: ''; position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: #9fb; }
+.curl .track b { position: absolute; top: -4px; left: 50%; width: 6px; height: 14px; margin-left: -3px; background: #f2c12e; }
 
 .prompt { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(10,16,12,.86); padding: 8px 14px; font-size: 15px; }
 .prompt[hidden], .banner[hidden] { display: none; }
@@ -61,3 +66,13 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .touch-mode .prompt { bottom: 190px; }
 .touch-mode .banner .t { font-size: 38px; }
 @media (max-width: 520px) { .buttons { grid-template-columns: repeat(3, 64px); } .buttons button { height: 54px; font-size: 12px; } .stick { width: 120px; height: 120px; } }
+
+/* Ball marker: a pointer over the ball, or an arrow at the screen edge when it's out of view. */
+.ballmark { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.ballmark[hidden] { display: none; }
+.ballmark i { position: absolute; left: -9px; top: -34px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-top: 14px solid #f2c12e; filter: drop-shadow(0 1px 2px #000a); }
+.ballmark span { position: absolute; left: 0; top: -54px; transform: translateX(-50%); font-size: 12px; font-weight: 700; white-space: nowrap; color: #fff; text-shadow: 0 1px 3px #000; }
+.ballmark.edge i { left: -14px; top: -14px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: #f2c12ee6; }
+.ballmark.edge i::after { content: ''; position: absolute; left: 30px; top: 7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 11px solid #f2c12e; }
+.ballmark.edge i::before { content: ''; position: absolute; left: 8px; top: 8px; width: 12px; height: 12px; border-radius: 50%; background: #f3f1ea; }
+.ballmark.edge span { top: 18px; }

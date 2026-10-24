@@ -5,12 +5,12 @@
 const PAD_BUTTONS: [index: number, code: string][] = [
   [0, 'KeyJ'], // A: hand-pass
   [1, 'KeyO'], // B: solo
-  [2, 'KeyE'], // X: toe-pick
+  [2, 'PadX'], // X: kick from the hands (hold for power, left stick curls), toe-pick off the ground
   [3, 'KeyK'], // Y: lofted kick (hold for power)
   [4, 'KeyV'], // LB: reset camera
   [5, 'ShiftLeft'], // RB: sprint
   [6, 'KeyB'], // LT: bounce
-  [7, 'KeyL'], // RT: low kick / shot (hold for power)
+  [7, 'KeyO'], // RT: solo
   [8, 'KeyC'], // View: switch camera
   [9, 'F12'], // Menu: new game
   [10, 'ShiftLeft'], // Left stick click: sprint
@@ -33,6 +33,10 @@ export class Input {
   click: { x: number; y: number } | null = null;
   /** Called when a controller is plugged in or removed. */
   onGamepadChange: ((connected: boolean) => void) | null = null;
+  /** True while the controller's right stick is pushed; the camera goes back behind the player once it's let go. */
+  rightStickHeld = false;
+  /** True while the controller was the last thing used, so prompts can name its buttons. */
+  usingPad = false;
   private padHeld = new Set<string>();
   private padMoving = false;
 
@@ -42,6 +46,7 @@ export class Input {
       // F12 resets the game; stop the browser's own use of it where the browser allows.
       if (e.code === 'F12') e.preventDefault();
       if (e.repeat || this.down.has(e.code)) return;
+      this.usingPad = false;
       this.press(e.code);
     });
     target.addEventListener('keyup', (e) => this.release(e.code));
@@ -137,6 +142,7 @@ export class Input {
       const b = pad.buttons[i];
       if (b && (b.pressed || b.value > 0.5)) wanted.add(code);
     }
+    if (wanted.size > 0) this.usingPad = true;
     for (const code of wanted) if (!this.padHeld.has(code)) this.press(code);
     for (const code of this.padHeld) if (!wanted.has(code)) this.release(code);
     this.padHeld = wanted;
@@ -152,6 +158,7 @@ export class Input {
       this.stick.x = x;
       this.stick.y = y;
       this.padMoving = true;
+      this.usingPad = true;
       this.stickSprints = false;
     } else if (this.padMoving) {
       this.stick.x = 0;
@@ -164,6 +171,7 @@ export class Input {
     const ry = pad.axes[3] ?? 0;
     if (Math.abs(rx) > DEADZONE) this.look.dx += rx * 900 * dt;
     if (Math.abs(ry) > DEADZONE) this.look.dy += ry * 500 * dt;
+    this.rightStickHeld = Math.abs(rx) > DEADZONE || Math.abs(ry) > DEADZONE;
   }
 
   /** Call once at the end of every frame. */
