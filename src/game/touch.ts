@@ -49,6 +49,7 @@ export function createTouchControls(input: Input, root: HTMLElement): void {
     }
     input.stick.x = dx;
     input.stick.y = -dy;
+    input.stickSprints = true;
     knob.style.transform = `translate(${dx * radius * 0.6}px, ${dy * radius * 0.6}px)`;
   };
   stick.addEventListener('pointerdown', (e) => {

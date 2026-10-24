@@ -19,6 +19,11 @@ const LINE_UP: [number, number][] = [
   [-8, -8], [-6, 8], [22, -22], [20, 0], [22, 22], [48, -16], [52, 0], [48, 16],
 ];
 
+const PAD_HELP = `<b>Left stick</b> move · <b>RB</b> sprint · <b>Right stick</b> camera<br />
+  <b>A</b> hand-pass · <b>B</b> solo · <b>LT</b> bounce · <b>X</b> toe-pick<br />
+  <b>Y</b> hold for a lofted kick · <b>RT</b> hold for a low kick<br />
+  <b>View</b> camera · <b>LB</b> reset view · <b>Menu</b> rules, twice for a new game`;
+
 async function start(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const engine = new BABYLON.Engine(canvas, true, { stencil: true, preserveDrawingBuffer: true });
@@ -69,14 +74,20 @@ async function start(): Promise<void> {
   const ball = new Ball(scene, shadows);
   createPostProcessing(scene, camera, touch ? 1 : 4);
 
-  const hud = new Hud();
   const toggleRules = () => {
     rules = rules.id === 'classic' ? RULE_SETS.enhanced2025 : RULE_SETS.classic;
     pitch.redraw(rules);
     return rules;
   };
+  const hud = new Hud();
   const input = new Input();
   input.attachLook(canvas);
+  const help = document.querySelector<HTMLElement>('.help');
+  const keyboardHelp = help?.innerHTML ?? '';
+  input.onGamepadChange = (connected) => {
+    if (help) help.innerHTML = connected ? PAD_HELP : keyboardHelp;
+    hud.banner(connected ? 'CONTROLLER CONNECTED' : 'CONTROLLER REMOVED', connected ? 'Xbox layout' : 'Keyboard and mouse', 1.8);
+  };
   if (touch) {
     document.body.classList.add('touch-mode');
     createTouchControls(input, document.getElementById('hud')!);

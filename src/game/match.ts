@@ -24,6 +24,8 @@ type Carry =
 const STRIDE = 1.5; // metres per foot plant
 const JOG = 5.5;
 const SPRINT = 8;
+/** Seconds allowed between the two presses of a double tap. */
+const DOUBLE_TAP = 0.35;
 const MOVE_DURATION = { bounce: 0.42, solo: 0.45, toePick: 0.55 } as const;
 /** How close a ball on the ground has to be for E to toe-pick it, in metres. */
 const TOE_PICK_REACH = 2.2;
@@ -43,6 +45,8 @@ export class Match {
   private home: TeamScore = emptyScore();
   private away: TeamScore = emptyScore();
   private clock = 0;
+  /** Time left to catch a second R press. One R switches the rules; two quick presses start a new game. */
+  private rTimer = 0;
   private phase = 0;
   private speed = 0;
   /** A kick being powered up. `fire` is set if the key was let go mid-solo or mid-bounce. */
@@ -64,6 +68,10 @@ export class Match {
   private bcPan = 0;
   private bcHeight = 16;
   private bcFov = 0.5;
+  /** Direction the player is turning to face after a click on the pitch. */
+  private faceYaw: number | null = null;
+  private clickMarker: BABYLON.Mesh;
+  private clickMarkerLife = 0;
   private actionPose: { pose: PoseName; t: number } | null = null;
   private deadTime = 0;
   private sinceRelease = 0;
@@ -73,7 +81,7 @@ export class Match {
   private marker: BABYLON.Mesh;
 
   constructor(
-    scene: BABYLON.Scene,
+    private scene: BABYLON.Scene,
     private camera: BABYLON.UniversalCamera,
     private player: PlayerFigure,
     private ball: Ball,
@@ -93,20 +101,34 @@ export class Match {
     mm.disableLighting = true;
     mm.alpha = 0.55;
     this.marker.material = mm;
+    this.clickMarker = BABYLON.MeshBuilder.CreateTorus('clickMarker', { diameter: 1.2, thickness: 0.12, tessellation: 32 }, scene);
+    const cm = new BABYLON.StandardMaterial('clickMarkerMat', scene);
+    cm.emissiveColor = new BABYLON.Color3(1, 1, 1);
+    cm.disableLighting = true;
+    this.clickMarker.material = cm;
+    this.clickMarker.isPickable = false;
+    this.clickMarker.setEnabled(false);
     hud.setRules(rules);
     hud.setScore(this.home, this.away);
   }
 
   update(dt: number): void {
     const inp = this.input;
+    inp.pollGamepad(dt);
     if (inp.wasPressed('KeyR')) {
-      this.rules = this.onRulesToggle();
-      this.tracker.setRules(this.rules);
-      this.hud.setRules(this.rules);
-      this.hud.banner(this.rules.name.toUpperCase(), this.rules.twoPointArcRadius ? 'Two-point arc, kick-outs past the 40 m arc, 3 up and 4 back' : 'Goals 3, points 1, no arc', 2);
+      if (this.rTimer > 0) {
+        this.rTimer = 0;
+        this.newGame();
+      } else {
+        this.rTimer = DOUBLE_TAP;
+      }
+    } else if (this.rTimer > 0) {
+      this.rTimer -= dt;
+      if (this.rTimer <= 0) this.switchRules();
     }
     if (inp.wasPressed('KeyC')) this.broadcastCam = !this.broadcastCam;
     if (inp.wasPressed('KeyV')) this.resetView();
+    this.applyClick();
     this.applyLook(dt);
 
     if (this.deadTime > 0) {
@@ -121,6 +143,12 @@ export class Match {
     this.poseBallInHand(dt);
     this.updateCamera(dt);
     this.marker.position.set(this.player.root.position.x, 0.03, this.player.root.position.z);
+    if (this.clickMarkerLife > 0) {
+      this.clickMarkerLife -= dt;
+      this.clickMarker.scaling.setAll(1 + (1 - this.clickMarkerLife) * 0.6);
+      (this.clickMarker.material as BABYLON.StandardMaterial).alpha = Math.max(0, this.clickMarkerLife);
+      if (this.clickMarkerLife <= 0) this.clickMarker.setEnabled(false);
+    }
     this.hud.setClock(this.clock);
     const inHand = this.carry.kind === 'hand' || this.carry.kind === 'bounce' || this.carry.kind === 'solo';
     this.hud.setSteps(inHand ? this.tracker.steps : null, this.rules.maxSteps, this.tracker.canBounce());
@@ -156,10 +184,20 @@ export class Match {
     if (stickLen > 0.15) want.addInPlace(f.scale(inp.stick.y)).addInPlace(r.scale(inp.stick.x));
 
     const moving = want.lengthSquared() > 0;
-    const sprint = inp.isDown('ShiftLeft') || inp.isDown('ShiftRight') || stickLen > 0.92;
+    const sprint = inp.isDown('ShiftLeft') || inp.isDown('ShiftRight') || (inp.stickSprints && stickLen > 0.92);
     const target = moving ? (sprint ? SPRINT : stickLen > 0.15 ? Math.max(2, JOG * Math.min(1, stickLen * 1.3)) : JOG) : 0;
     this.speed += (target - this.speed) * Math.min(1, dt * 6);
     const root = this.player.root;
+    if (moving) this.faceYaw = null;
+    if (this.faceYaw !== null) {
+      let d = this.faceYaw - root.rotation.y;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      root.rotation.y += d * Math.min(1, dt * 12);
+      let c = this.faceYaw - this.camYaw;
+      c = Math.atan2(Math.sin(c), Math.cos(c));
+      this.camYaw += c * Math.min(1, dt * 6);
+      if (Math.abs(d) < 0.01 && Math.abs(c) < 0.01) this.faceYaw = null;
+    }
     if (moving) {
       want.normalize();
       const goal = Math.atan2(want.x, want.z);
@@ -399,6 +437,49 @@ export class Match {
       }
       this.carry = { kind: 'hand' };
     }
+  }
+
+  private switchRules(): void {
+    this.rules = this.onRulesToggle();
+    this.tracker.setRules(this.rules);
+    this.hud.setRules(this.rules);
+    this.hud.banner(this.rules.name.toUpperCase(), this.rules.twoPointArcRadius ? 'Two-point arc, kick-outs past the 40 m arc, 3 up and 4 back' : 'Goals 3, points 1, no arc', 2);
+  }
+
+  /** Back to kick-off: scores and clock to zero, player at the start spot with the ball. Keeps the rule set. */
+  private newGame(): void {
+    this.home = emptyScore();
+    this.away = emptyScore();
+    this.clock = 0;
+    this.deadTime = 0;
+    this.speed = 0;
+    this.charge = null;
+    this.pendingHandPass = false;
+    this.faceYaw = null;
+    this.player.place(35, -4, HL, 0);
+    this.player.pose('stand');
+    this.restart();
+    this.resetView();
+    this.camera.position.copyFrom(this.player.root.position.add(new BABYLON.Vector3(-6.2, 2.7, 0)));
+    this.prevBall.copyFrom(this.ball.position);
+    this.hud.setScore(this.home, this.away);
+    this.hud.banner('NEW GAME', 'Scores reset', 1.5);
+  }
+
+  /** A click or tap on the pitch turns the player to face that spot, and the camera swings round behind. */
+  private applyClick(): void {
+    const click = this.input.click;
+    if (!click) return;
+    const hit = this.scene.pick(click.x, click.y, (m) => m.name === 'ground');
+    if (!hit?.hit || !hit.pickedPoint) return;
+    const me = this.player.root.position;
+    const dx = hit.pickedPoint.x - me.x;
+    const dz = hit.pickedPoint.z - me.z;
+    if (dx * dx + dz * dz < 0.25) return;
+    this.faceYaw = Math.atan2(dx, dz);
+    this.clickMarker.position.set(hit.pickedPoint.x, 0.06, hit.pickedPoint.z);
+    this.clickMarker.setEnabled(true);
+    this.clickMarkerLife = 1;
   }
 
   private applyLook(dt: number): void {
