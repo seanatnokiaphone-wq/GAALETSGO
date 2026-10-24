@@ -24,8 +24,6 @@ type Carry =
 const STRIDE = 1.5; // metres per foot plant
 const JOG = 5.5;
 const SPRINT = 8;
-/** Seconds allowed between the two presses of a double tap. */
-const DOUBLE_TAP = 0.35;
 const MOVE_DURATION = { bounce: 0.42, solo: 0.45, toePick: 0.55 } as const;
 /** How close a ball on the ground has to be for E to toe-pick it, in metres. */
 const TOE_PICK_REACH = 2.2;
@@ -45,8 +43,6 @@ export class Match {
   private home: TeamScore = emptyScore();
   private away: TeamScore = emptyScore();
   private clock = 0;
-  /** Time left to catch a second R press. One R switches the rules; two quick presses start a new game. */
-  private rTimer = 0;
   private phase = 0;
   private speed = 0;
   /** A kick being powered up. `fire` is set if the key was let go mid-solo or mid-bounce. */
@@ -115,17 +111,8 @@ export class Match {
   update(dt: number): void {
     const inp = this.input;
     inp.pollGamepad(dt);
-    if (inp.wasPressed('KeyR')) {
-      if (this.rTimer > 0) {
-        this.rTimer = 0;
-        this.newGame();
-      } else {
-        this.rTimer = DOUBLE_TAP;
-      }
-    } else if (this.rTimer > 0) {
-      this.rTimer -= dt;
-      if (this.rTimer <= 0) this.switchRules();
-    }
+    if (inp.wasPressed('KeyR')) this.switchRules();
+    if (inp.wasPressed('F12')) this.newGame();
     if (inp.wasPressed('KeyC')) this.broadcastCam = !this.broadcastCam;
     if (inp.wasPressed('KeyV')) this.resetView();
     this.applyClick();

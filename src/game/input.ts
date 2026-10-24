@@ -12,8 +12,9 @@ const PAD_BUTTONS: [index: number, code: string][] = [
   [6, 'KeyB'], // LT: bounce
   [7, 'KeyL'], // RT: low kick / shot (hold for power)
   [8, 'KeyC'], // View: switch camera
-  [9, 'KeyR'], // Menu: rules, twice for a new game
+  [9, 'F12'], // Menu: new game
   [10, 'ShiftLeft'], // Left stick click: sprint
+  [11, 'KeyR'], // Right stick click: switch rules
 ];
 const DEADZONE = 0.2;
 
@@ -38,6 +39,8 @@ export class Input {
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
       // One physical press is one action: ignore auto-repeat, including hosts that don't flag it.
+      // F12 resets the game; stop the browser's own use of it where the browser allows.
+      if (e.code === 'F12') e.preventDefault();
       if (e.repeat || this.down.has(e.code)) return;
       this.press(e.code);
     });

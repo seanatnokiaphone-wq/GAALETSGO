@@ -39,7 +39,7 @@ Add `?rules=2025` to the URL to start with the 2025 rules, or press **R** in gam
 | V | Reset the camera view |
 | C | Switch between the behind-the-player and broadcast cameras |
 | R | Switch between classic and 2025 rules |
-| R twice quickly | New game (scores and clock reset) |
+| F12 | New game (scores and clock reset). Some browsers also open developer tools on F12 |
 | Click or tap the pitch | Turn to face that spot (aims kicks and passes) |
 
 ### Xbox controller
@@ -59,7 +59,8 @@ Plug in or pair a controller and press any button; the help panel switches to th
 | RT (hold) | Low kick |
 | View | Switch camera |
 | LB | Reset camera view |
-| Menu | Switch rules, twice quickly for a new game |
+| Right stick click | Switch rules |
+| Menu | New game |
 
 On phones and tablets an on-screen stick and buttons appear. Push the stick to the edge to sprint.
 

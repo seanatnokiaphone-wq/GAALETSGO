@@ -22,7 +22,7 @@ const LINE_UP: [number, number][] = [
 const PAD_HELP = `<b>Left stick</b> move · <b>RB</b> sprint · <b>Right stick</b> camera<br />
   <b>A</b> hand-pass · <b>B</b> solo · <b>LT</b> bounce · <b>X</b> toe-pick<br />
   <b>Y</b> hold for a lofted kick · <b>RT</b> hold for a low kick<br />
-  <b>View</b> camera · <b>LB</b> reset view · <b>Menu</b> rules, twice for a new game`;
+  <b>View</b> camera · <b>LB</b> reset view · <b>R3</b> rules · <b>Menu</b> new game`;
 
 async function start(): Promise<void> {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
