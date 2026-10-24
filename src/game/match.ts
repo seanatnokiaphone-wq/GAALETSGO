@@ -8,6 +8,7 @@ import {
   distanceFromGoal,
   emptyScore,
   type RuleSet,
+  type RuleSetId,
   type ShotMethod,
   type TeamScore,
 } from '../rules';
@@ -15,6 +16,9 @@ import { PlayerFigure, type PoseName } from '../scene/player';
 import { BALL_RADIUS, Ball } from './ball';
 import { Hud } from './hud';
 import { Input } from './input';
+
+type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number };
+const MAX_QUEUED = 3;
 
 type Carry =
   | { kind: 'none' }
@@ -47,10 +51,17 @@ export class Match {
   private speed = 0;
   /** A kick being powered up. `fire` is set if the key was let go mid-solo or mid-bounce. */
   private charge: { key: 'KeyK' | 'KeyL'; power: number; fire: boolean } | null = null;
-  /** A hand-pass asked for mid-solo or mid-bounce, played as soon as the ball is back in hand. */
-  private pendingHandPass = false;
+  /**
+   * Actions pressed while another is still playing (a solo, a bounce, a toe-pick). Each press is one
+   * action, and they play one after another in the order pressed, never two at once.
+   */
+  private queue: QueuedAction[] = [];
   /** Direction the behind-the-player camera looks. Movement keys are relative to it. */
   private camYaw = 0;
+  /** Camera direction captured when the player starts steering; movement stays relative to it. */
+  private moveYaw: number | null = null;
+  /** The rule set the page started with; a new game goes back to it. */
+  private startRules: RuleSetId;
   /** E pressed a moment before reaching the ball still counts, so the pick-up isn't missed at a run. */
   private toePickBuffer = 0;
   /** Where the player steps to stand over the ball during a toe-pick. */
@@ -86,6 +97,7 @@ export class Match {
     private rules: RuleSet,
     private onRulesToggle: () => RuleSet,
   ) {
+    this.startRules = rules.id;
     this.tracker = new CarryTracker(rules);
     this.tracker.start('catch');
     this.player.place(35, -4, HL, 0);
@@ -142,6 +154,8 @@ export class Match {
     this.hud.setPower(this.charge ? this.charge.power : null);
     this.hud.update(dt);
     this.prevBall.copyFrom(this.ball.position);
+    // Clear this frame's presses, releases, clicks and camera drags so each one acts exactly once.
+    inp.endFrame();
   }
 
   private forward(): BABYLON.Vector3 {
@@ -156,18 +170,23 @@ export class Match {
   private movePlayer(dt: number): void {
     const inp = this.input;
     // Movement is relative to the camera. The broadcast camera always looks across the pitch (+z).
-    // Using a steady camera direction, not the player's facing, stops left/right from spinning the player.
-    const yaw = this.broadcastCam ? 0 : this.camYaw;
+    // The direction is fixed when the stick or keys are first pushed and held until they're let go, so
+    // panning the camera (right stick, mouse) or the camera swinging round never bends the player's run:
+    // the player always faces where the left stick points.
+    const key = (a: string, b: string) => inp.isDown(a) || inp.isDown(b);
+    const stickLen = Math.hypot(inp.stick.x, inp.stick.y);
+    const steering = stickLen > 0.15 || key('KeyW', 'ArrowUp') || key('KeyS', 'ArrowDown') || key('KeyA', 'ArrowLeft') || key('KeyD', 'ArrowRight');
+    if (!steering) this.moveYaw = null;
+    else if (this.moveYaw === null) this.moveYaw = this.broadcastCam ? 0 : this.camYaw;
+    const yaw = this.moveYaw ?? (this.broadcastCam ? 0 : this.camYaw);
     const f = new BABYLON.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const r = new BABYLON.Vector3(f.z, 0, -f.x);
     const want = BABYLON.Vector3.Zero();
-    const key = (a: string, b: string) => inp.isDown(a) || inp.isDown(b);
     if (key('KeyW', 'ArrowUp')) want.addInPlace(f);
     if (key('KeyS', 'ArrowDown')) want.subtractInPlace(f);
     if (key('KeyD', 'ArrowRight')) want.addInPlace(r);
     if (key('KeyA', 'ArrowLeft')) want.subtractInPlace(r);
 
-    const stickLen = Math.hypot(inp.stick.x, inp.stick.y);
     if (stickLen > 0.15) want.addInPlace(f.scale(inp.stick.y)).addInPlace(r.scale(inp.stick.x));
 
     const moving = want.lengthSquared() > 0;
@@ -190,7 +209,7 @@ export class Match {
       const goal = Math.atan2(want.x, want.z);
       let diff = goal - root.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      root.rotation.y += diff * Math.min(1, dt * 10);
+      root.rotation.y += diff * Math.min(1, dt * 14);
       // The camera swings round behind the player only while they run away from it.
       const away = Math.max(0, BABYLON.Vector3.Dot(want, f));
       let camDiff = root.rotation.y - this.camYaw;
@@ -237,31 +256,38 @@ export class Match {
 
     const holding = c.kind === 'hand' || c.kind === 'bounce' || c.kind === 'solo' || c.kind === 'toePick';
     if (holding) {
-      // Kicks and hand-passes asked for mid-solo or mid-bounce are kept and played once the ball is back in hand.
+      const add = (a: QueuedAction) => {
+        if (this.queue.length < MAX_QUEUED) this.queue.push(a);
+      };
+      if (inp.wasPressed('KeyO')) add({ kind: 'solo' });
+      if (inp.wasPressed('KeyB')) add({ kind: 'bounce' });
+      if (inp.wasPressed('KeyJ')) add({ kind: 'handPass' });
+      // Kicks power up while the key is held and join the queue when it is let go.
       if (!this.charge && (inp.wasPressed('KeyK') || inp.wasPressed('KeyL'))) {
         this.charge = { key: inp.wasPressed('KeyK') ? 'KeyK' : 'KeyL', power: 0, fire: false };
       }
       if (this.charge) {
         this.charge.power = Math.min(1, this.charge.power + dt * 1.1);
-        if (inp.wasReleased(this.charge.key)) this.charge.fire = true;
+        if (inp.wasReleased(this.charge.key)) {
+          add({ kind: 'kick', lofted: this.charge.key === 'KeyK', power: this.charge.power });
+          this.charge = null;
+        }
       }
-      if (c.kind !== 'hand' && inp.wasPressed('KeyJ')) this.pendingHandPass = true;
     }
 
     if (c.kind === 'hand') {
-      if (this.charge?.fire) {
-        const lofted = this.charge.key === 'KeyK';
+      // One action per frame, and only once the previous move has finished.
+      const next = this.queue.shift();
+      if (next?.kind === 'kick') {
         // A tap is a short chip; a full hold reaches about 60 m.
-        this.release('kick', 8 + 24 * this.charge.power, lofted ? 0.5 : 0.12);
-        this.charge = null;
-      } else if (this.pendingHandPass || inp.wasPressed('KeyJ')) {
-        this.pendingHandPass = false;
+        this.release('kick', 8 + 24 * next.power, next.lofted ? 0.5 : 0.12);
+      } else if (next?.kind === 'handPass') {
         this.release('handPass', 13, 0.22);
-      } else if (inp.wasPressed('KeyB')) {
+      } else if (next?.kind === 'bounce') {
         const res = this.tracker.bounce();
         if (!res.ok) return this.foul('Double bounce', 'You can’t bounce twice in a row. Solo in between.');
         this.carry = { kind: 'bounce', t: 0, from: this.ball.position.clone() };
-      } else if (inp.wasPressed('KeyO')) {
+      } else if (next?.kind === 'solo') {
         this.tracker.solo();
         this.carry = { kind: 'solo', t: 0, from: this.ball.position.clone() };
       }
@@ -324,6 +350,8 @@ export class Match {
     this.ball.hold(from);
     this.ball.launch(v, spin);
     this.carry = { kind: 'none' };
+    // The ball has gone: anything still queued no longer applies.
+    this.queue = [];
     this.tracker.release();
     this.sinceRelease = 0;
     const me = this.player.root.position;
@@ -375,7 +403,7 @@ export class Match {
     this.hud.banner(title.toUpperCase(), detail, 2.5);
     this.hud.setPrompt('');
     this.charge = null;
-    this.pendingHandPass = false;
+    this.queue = [];
     this.deadTime = 2.5;
     this.speed = 0;
     this.player.pose('stand');
@@ -434,15 +462,29 @@ export class Match {
   }
 
   /** Back to kick-off: scores and clock to zero, player at the start spot with the ball. Keeps the rule set. */
+  /** Back to kick-off as the page first loaded: scores, clock, rules, cameras, player and ball. */
   private newGame(): void {
+    if (this.rules.id !== this.startRules) this.switchRules();
     this.home = emptyScore();
     this.away = emptyScore();
     this.clock = 0;
     this.deadTime = 0;
     this.speed = 0;
+    this.phase = 0;
     this.charge = null;
-    this.pendingHandPass = false;
+    this.queue = [];
+    this.toePickBuffer = 0;
+    this.pickSpot = null;
+    this.actionPose = null;
     this.faceYaw = null;
+    this.sinceRelease = 0;
+    this.sinceLook = 99;
+    this.broadcastCam = false;
+    this.moveYaw = null;
+    this.lastStrike = { method: 'kick', fromX: 0, fromZ: 0 };
+    this.clickMarkerLife = 0;
+    this.clickMarker.setEnabled(false);
+    this.hud.setPrompt('');
     this.player.place(35, -4, HL, 0);
     this.player.pose('stand');
     this.restart();
