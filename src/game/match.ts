@@ -19,7 +19,7 @@ import { Crowd, SHOULDER_REACH } from './bodies';
 import { Hud } from './hud';
 import { Input } from './input';
 
-type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number; curl: number; follow?: boolean };
+type QueuedAction = { kind: 'solo' } | { kind: 'bounce' } | { kind: 'handPass' } | { kind: 'kick'; lofted: boolean; power: number; curl: number; follow?: boolean; yaw?: number };
 const MAX_QUEUED = 3;
 /** How far (radians) full curl pushes the kick off the line the player faces. */
 const CURL_AIM = 0.4;
@@ -74,7 +74,7 @@ export class Match {
    * A kick being powered up. With the controller's X (`PadX`) the left stick sets `curl` from -1
    * (bend left) to 1 (bend right) instead of moving the player.
    */
-  private charge: { key: 'KeyK' | 'KeyL' | 'PadX'; power: number; curl: number; held: number } | null = null;
+  private charge: { key: 'KeyK' | 'KeyL' | 'PadX'; power: number; curl: number; held: number; easeIn: number } | null = null;
   /** Where an X kick will fly at the current power and curl, and where it will land. */
   private aimLine: BABYLON.Mesh | null = null;
   private aimLanding: BABYLON.Mesh;
@@ -299,8 +299,17 @@ export class Match {
     const c = this.charge!;
     this.moveYaw = null;
     this.faceYaw = null;
-    const want = Math.abs(inp.stick.x) > 0.15 ? BABYLON.Scalar.Clamp(inp.stick.x, -1, 1) : 0;
-    c.curl += (want - c.curl) * Math.min(1, dt * 8);
+    // The aim holds where it was left: a stick springing back to the centre (as it does when X is let
+    // go) doesn't undo it. Easing the stick back in only counts once it has been held there a moment,
+    // and pushing straight up for a moment sets a straight kick.
+    const pushed = Math.hypot(inp.stick.x, inp.stick.y) > 0.3;
+    const want = pushed ? BABYLON.Scalar.Clamp(inp.stick.x, -1, 1) : c.curl;
+    if (Math.abs(want) >= Math.abs(c.curl) - 0.05) {
+      c.easeIn = 0;
+      c.curl += (want - c.curl) * Math.min(1, dt * 8);
+    } else if ((c.easeIn += dt) > 0.15) {
+      c.curl += (want - c.curl) * Math.min(1, dt * 8);
+    }
     const stickLen = Math.hypot(inp.stick.x, inp.stick.y);
     const keys = ['KeyW', 'ArrowUp', 'KeyS', 'ArrowDown', 'KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight'].some((k) => inp.isDown(k));
     const sprint = inp.isDown('ShiftLeft') || inp.isDown('ShiftRight');
@@ -368,7 +377,7 @@ export class Match {
       // The controller's X kicks when the ball is in hand (and toe-picks when it's on the ground).
       if (!this.charge) {
         const key = (['KeyK', 'KeyL', 'PadX'] as const).find((k) => inp.wasPressed(k));
-        if (key) this.charge = { key, power: 0, curl: 0, held: 0 };
+        if (key) this.charge = { key, power: 0, curl: 0, held: 0, easeIn: 0 };
       }
       if (this.charge) {
         this.charge.power = Math.min(1, this.charge.power + dt * 1.1);
@@ -376,7 +385,9 @@ export class Match {
         // An X kick goes by itself once X has been held for X_KICK_LIMIT seconds.
         const timeUp = this.charge.key === 'PadX' && this.charge.held >= X_KICK_LIMIT;
         if (inp.wasReleased(this.charge.key) || timeUp) {
-          add({ kind: 'kick', lofted: this.charge.key !== 'KeyL', power: this.charge.power, curl: this.charge.curl, follow: this.charge.key === 'PadX' });
+          // An X kick keeps the exact line shown when X was let go, even if it goes off a moment later.
+          const x = this.charge.key === 'PadX';
+          add({ kind: 'kick', lofted: !(this.charge.key === 'KeyL'), power: this.charge.power, curl: this.charge.curl, follow: x, yaw: x ? this.player.root.rotation.y : undefined });
           this.charge = null;
         }
       }
@@ -387,6 +398,7 @@ export class Match {
       const next = this.queue.shift();
       if (next?.kind === 'kick') {
         // A tap is a short chip; a full hold reaches about 60 m.
+        if (next.yaw !== undefined) this.player.root.rotation.y = next.yaw;
         this.release('kick', 8 + 24 * next.power, next.lofted ? 0.5 : 0.12, next.curl);
         if (next.follow) this.followBall = FOLLOW_BALL_TIME;
       } else if (next?.kind === 'handPass') {
