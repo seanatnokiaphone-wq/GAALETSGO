@@ -125,7 +125,7 @@ export class Match {
   private faceYaw: number | null = null;
   private clickMarker: BABYLON.Mesh;
   private clickMarkerLife = 0;
-  private actionPose: { pose: PoseName; t: number } | null = null;
+  private actionPose: { pose: PoseName; t: number; dur: number } | null = null;
   private deadTime = 0;
   private sinceRelease = 0;
   private lastStrike: { method: ShotMethod; fromX: number; fromZ: number } = { method: 'kick', fromX: 0, fromZ: 0 };
@@ -352,7 +352,7 @@ export class Match {
 
     if (this.actionPose) {
       this.actionPose.t -= dt;
-      this.player.pose(this.actionPose.pose, 0, this.speed);
+      this.player.pose(this.actionPose.pose, 1 - this.actionPose.t / this.actionPose.dur, this.speed);
       if (this.actionPose.t <= 0) this.actionPose = null;
     } else if (this.carry.kind === 'toePick') {
       this.player.pose('toePick', 0, this.speed);
@@ -500,7 +500,7 @@ export class Match {
     this.sinceRelease = 0;
     const me = this.player.root.position;
     this.lastStrike = { method, fromX: me.x, fromZ: me.z };
-    this.actionPose = { pose: method === 'kick' ? 'kick' : 'handPass', t: 0.3 };
+    this.actionPose = method === 'kick' ? { pose: 'kick', t: 0.5, dur: 0.5 } : { pose: 'handPass', t: 0.3, dur: 0.3 };
   }
 
   /** Detects scores, wides and the ball going over the sideline. Returns true if play stopped. */
@@ -581,7 +581,7 @@ export class Match {
     if (this.actionPose) return;
     const me = this.player.root.position;
     const opp = this.crowd.nearestOpponent(me, 'ARD', SHOULDER_REACH);
-    this.actionPose = { pose: 'shoulder', t: 0.35 };
+    this.actionPose = { pose: 'shoulder', t: 0.35, dur: 0.35 };
     if (!opp) return;
     const dir = opp.fig.root.position.subtract(me);
     dir.y = 0;
@@ -599,7 +599,7 @@ export class Match {
     for (const k of contacts) {
       if (k.kind === 'shoulderedBy') {
         this.speed *= 0.45;
-        this.actionPose = { pose: 'stumble', t: 0.35 };
+        this.actionPose = { pose: 'stumble', t: 0.35, dur: 0.35 };
         this.hud.banner('SHOULDERED', this.input.usingPad ? 'LB to give one back' : 'F to give one back', 1);
       } else {
         this.speed *= 0.75;

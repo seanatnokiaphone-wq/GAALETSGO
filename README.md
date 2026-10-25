@@ -88,7 +88,8 @@ tests/     Vitest tests for the rules engine
 
 ## Credits
 
-The players are the Mixamo Y Bot, motion-captured idle, walk and run included, taken from the
-[Babylon.js Assets](https://github.com/BabylonJS/Assets) repository (CC BY 4.0) and converted to
-`public/models/ybot.glb`. Kits are painted onto the mesh at load time. Add `?figures=simple` to the URL
-for the lightweight capsule players; phones and tablets use those by default (`?figures=full` overrides).
+The players are Sean's own model and animations (`tools/player-model/solo1.fbx`): standing, the run with
+the ball, the solo and the kick off the hands. `tools/player-model/convert.ts` cuts the player and those
+clips out into `public/models/player.glb` (steps at the top of that file). Kits are painted onto the mesh
+at load time. Add `?figures=simple` to the URL for the lightweight capsule players; phones and tablets
+use those by default (`?figures=full` overrides).

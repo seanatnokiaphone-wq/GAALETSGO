@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@babylonjs/serializers": "^8.56.2",
+    "fbx2gltf": "^0.9.7-p1",
     "typescript": "^5.9.3",
     "vite": "^7.3.7",
     "vitest": "^3.2.7"

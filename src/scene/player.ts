@@ -11,7 +11,7 @@ export interface Kit {
 }
 
 export const KITS = {
-  ardmore: { jersey: '#1f7a3a', shorts: '#f4f4f0', socks: '#1f7a3a', band: '#f2c12e', numberColour: '#f2c12e' },
+  ardmore: { jersey: '#1f7a3a', shorts: '#f4f4f0', socks: '#1f7a3a', band: '#f2c12e', numberColour: '#ffffff' },
   kilcarra: { jersey: '#79b4e3', shorts: '#13294b', socks: '#13294b', band: null, numberColour: '#13294b' },
   ardmoreKeeper: { jersey: '#d8462b', shorts: '#111111', socks: '#d8462b', band: null, numberColour: '#111111' },
   kilcarraKeeper: { jersey: '#f2d43a', shorts: '#111111', socks: '#111111', band: null, numberColour: '#111111' },

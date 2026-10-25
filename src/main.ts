@@ -67,7 +67,7 @@ async function start(): Promise<void> {
   let athletes: AthleteLibrary | null = null;
   if (figuresParam !== 'simple' && (!touch || figuresParam === 'full')) {
     try {
-      athletes = await AthleteLibrary.load(scene, shadows, import.meta.env.VITE_PLAYER_MODEL ?? 'models/ybot.glb', [KITS.ardmore, KITS.kilcarra, KITS.ardmoreKeeper, KITS.kilcarraKeeper]);
+      athletes = await AthleteLibrary.load(scene, shadows, import.meta.env.VITE_PLAYER_MODEL ?? 'models/player.glb', [KITS.ardmore, KITS.kilcarra, KITS.ardmoreKeeper, KITS.kilcarraKeeper]);
     } catch (e) {
       console.warn('Falling back to simple player figures:', e);
     }
