@@ -1,0 +1,83 @@
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0b1a10; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+#game { width: 100%; height: 100%; display: block; outline: none; }
+#hud { position: absolute; inset: 0; pointer-events: none; color: #fff; }
+#loading { position: absolute; inset: 0; display: grid; place-items: center; color: #dfe9e2; font-size: 18px; }
+
+.bug { position: absolute; left: 24px; top: 20px; display: flex; font-weight: 700; box-shadow: 0 4px 18px rgba(0,0,0,.45); }
+.bug .clock { background: #111a14; padding: 6px 14px; font-size: 22px; display: flex; flex-direction: column; align-items: center; font-variant-numeric: tabular-nums; }
+.bug .clock small { font-size: 10px; color: #9fb; letter-spacing: .12em; text-transform: uppercase; }
+.bug .team { display: flex; align-items: center; gap: 10px; padding: 6px 14px; font-size: 22px; background: rgba(10,16,12,.86); }
+.bug .sw { width: 10px; height: 28px; }
+.bug .sw.ard { background: #1f7a3a; border-right: 4px solid #f2c12e; }
+.bug .sw.kil { background: #79b4e3; border-right: 4px solid #13294b; }
+.bug .sc { font-variant-numeric: tabular-nums; }
+
+.card { position: absolute; left: 24px; bottom: 24px; background: rgba(10,16,12,.86); padding: 12px 16px; min-width: 300px; }
+.card .nm { font-size: 18px; font-weight: 700; }
+.card .nm span { color: #f2c12e; margin-right: 8px; }
+.card .pos { font-size: 11px; color: #9fb; letter-spacing: .12em; margin-top: 2px; }
+.steps { display: flex; gap: 6px; margin-top: 12px; align-items: center; font-size: 12px; letter-spacing: .1em; }
+.steps[hidden] { display: none; }
+.steps b { width: 26px; height: 10px; background: #2a3a30; }
+.steps b.on { background: #f2c12e; }
+.steps b.warn { background: #ff6b3d; }
+.steps em { font-style: normal; margin-left: 8px; color: #c8d6cc; }
+.steps em.warn { color: #ff6b3d; }
+.power { height: 8px; background: #2a3a30; margin-top: 10px; }
+.power[hidden] { display: none; }
+.power i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #4fd27a, #f2c12e, #ff6b3d); }
+.curl { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 11px; letter-spacing: 0.1em; color: #c8d6cc; }
+.curl[hidden] { display: none; }
+.curl .track { position: relative; flex: 1; height: 6px; background: #2a3a30; }
+.curl .track::after { content: ''; position: absolute; left: 50%; top: -3px; width: 2px; height: 12px; background: #9fb; }
+.curl .track b { position: absolute; top: -4px; left: 50%; width: 6px; height: 14px; margin-left: -3px; background: #f2c12e; }
+
+.prompt { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(10,16,12,.86); padding: 8px 14px; font-size: 15px; }
+.prompt[hidden], .banner[hidden] { display: none; }
+.banner { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); text-align: center; }
+.banner .t { font-size: 54px; font-weight: 800; letter-spacing: .08em; text-shadow: 0 4px 20px rgba(0,0,0,.6); }
+.banner .s { font-size: 17px; margin-top: 6px; background: rgba(10,16,12,.86); display: inline-block; padding: 6px 14px; }
+.help { position: absolute; right: 24px; bottom: 24px; background: rgba(10,16,12,.78); padding: 10px 14px; font-size: 13px; line-height: 1.7; color: #dfe9e2; }
+.help b { color: #f2c12e; }
+
+#start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(6,14,9,.55); cursor: pointer; padding: 16px; }
+#start[hidden] { display: none; }
+.start-card { max-width: 440px; background: rgba(10,16,12,.92); color: #e4ebe5; padding: 22px 24px; text-align: center; }
+.start-title { font-size: 34px; font-weight: 800; letter-spacing: .1em; color: #f2c12e; }
+.start-card p { margin: 12px 0 0; line-height: 1.5; }
+.start-go { font-weight: 700; color: #fff; }
+
+/* Touch layout */
+.touch { position: absolute; inset: 0; pointer-events: none; user-select: none; -webkit-user-select: none; touch-action: none; }
+.touch button { pointer-events: auto; touch-action: none; font: inherit; color: #fff; border: 2px solid rgba(255,255,255,.35); background: rgba(10,16,12,.7); }
+.touch button.down { background: rgba(242,193,46,.85); color: #111; }
+.stick { pointer-events: auto; touch-action: none; position: absolute; left: max(20px, env(safe-area-inset-left, 0px)); bottom: max(24px, env(safe-area-inset-bottom, 0px)); width: 140px; height: 140px; border-radius: 50%; background: rgba(10,16,12,.45); border: 2px solid rgba(255,255,255,.3); display: grid; place-items: center; }
+.knob { width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,.75); }
+.buttons { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(3, 76px); gap: 10px; }
+.buttons button { height: 60px; border-radius: 14px; font-size: 13px; font-weight: 700; }
+.buttons .kick { border-color: #f2c12e; }
+.top-buttons { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: 16px; display: flex; gap: 8px; }
+.top-buttons button { padding: 8px 12px; border-radius: 10px; font-size: 13px; }
+.touch-mode .help { display: none; }
+.touch-mode .card { left: 16px; bottom: auto; top: 76px; min-width: 0; padding: 8px 12px; }
+.touch-mode .card .pos { display: none; }
+.touch-mode .bug { left: 16px; top: 12px; }
+.touch-mode .bug .team, .touch-mode .bug .clock { font-size: 16px; padding: 4px 10px; }
+.touch-mode .prompt { bottom: 190px; }
+.touch-mode .banner .t { font-size: 38px; }
+@media (max-width: 520px) { .buttons { grid-template-columns: repeat(3, 64px); } .buttons button { height: 54px; font-size: 12px; } .stick { width: 120px; height: 120px; } }
+
+/* Ball marker: a pointer over the ball, or an arrow at the screen edge when it's out of view. */
+.ballmark { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.ballmark[hidden] { display: none; }
+.ballmark i { position: absolute; left: -9px; top: -34px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-top: 14px solid #f2c12e; filter: drop-shadow(0 1px 2px #000a); }
+.ballmark span { position: absolute; left: 0; top: -54px; transform: translateX(-50%); font-size: 12px; font-weight: 700; white-space: nowrap; color: #fff; text-shadow: 0 1px 3px #000; }
+.ballmark.edge i { left: -14px; top: -14px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: #f2c12ee6; }
+.ballmark.edge i::after { content: ''; position: absolute; left: 30px; top: 7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 11px solid #f2c12e; }
+.ballmark.edge i::before { content: ''; position: absolute; left: 8px; top: 8px; width: 12px; height: 12px; border-radius: 50%; background: #f3f1ea; }
+.ballmark.edge span { top: 18px; }
+
+/* Frame and label over the F1 ball-cam picture-in-picture (the 3D view itself is a second camera viewport). */
+.ballcam { position: absolute; border: 2px solid #f2c12e; box-shadow: 0 4px 18px #0008; box-sizing: border-box; pointer-events: auto; cursor: move; touch-action: none; z-index: 5; }
+.ballcam[hidden] { display: none; }
+.ballcam span { position: absolute; left: 0; top: 0; background: #f2c12e; color: #111; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 8px; }

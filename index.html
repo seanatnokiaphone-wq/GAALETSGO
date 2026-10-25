@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GAALETSGO</title>
+  </head>
+  <body>
+    <canvas id="game" tabindex="0"></canvas>
+    <div id="hud">
+      <div class="bug">
+        <div class="clock"><span id="clock">00:00</span><small id="rules">Classic rules</small></div>
+        <div class="team"><span class="sw ard"></span>ARD <span class="sc" id="score-home">0-00 (0)</span></div>
+        <div class="team"><span class="sw kil"></span>KIL <span class="sc" id="score-away">0-00 (0)</span></div>
+      </div>
+      <div class="card">
+        <div class="nm" id="card-name"><span>14</span>C. Mac Giolla</div>
+        <div class="pos" id="card-pos">FULL-FORWARD · ARDMORE</div>
+        <div class="steps" id="steps">STEPS <b></b><b></b><b></b><b></b> <em id="steps-hint"></em></div>
+        <div class="power" id="power" hidden><i></i></div>
+        <div class="curl" id="curl" hidden><div class="track"><b></b></div><span id="curl-label">CURL STRAIGHT</span></div>
+      </div>
+      <div class="ballcam" id="ballcam" hidden><span>BALL CAM</span></div>
+      <div class="ballmark" id="ballmark" hidden><i></i><span></span></div>
+      <div class="prompt" id="prompt" hidden></div>
+      <div class="banner" id="banner" hidden><div class="t" id="banner-title"></div><div class="s" id="banner-sub"></div></div>
+      <div class="help">
+        <b>WASD</b> move · <b>Shift</b> sprint · <b>O</b> solo · <b>B</b> bounce · <b>J</b> hand-pass / switch<br />
+        <b>K</b> hold for a lofted kick · <b>L</b> hold for a low kick · <b>E</b> toe-pick · <b>Q</b> auto-solo on/off<br />
+        <b>F</b> shoulder · <b>Drag</b> pan camera · <b>Wheel</b> zoom · <b>V</b> reset view<br />
+        <b>C</b> camera · <b>R</b> classic / 2025 rules · <b>F12</b> new game<br />
+        <b>Click</b> the pitch to face that way · <b>F1</b> ball cam
+      </div>
+    </div>
+    <div id="loading">Loading the pitch…</div>
+    <div id="start" hidden>
+      <div class="start-card">
+        <div class="start-title">GAALETSGO</div>
+        <p>You're Ardmore's full-forward. Carry the ball up to 4 steps, then solo or bounce. Kick it over the bar for a point or under for a goal.</p>
+        <p class="start-go">Tap or click to play</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

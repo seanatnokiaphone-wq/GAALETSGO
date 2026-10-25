@@ -2,3 +2,5 @@ node_modules/
 dist/
 .DS_Store
 *.log
+dist-demo/
+tools/player-model/solo1.glb
