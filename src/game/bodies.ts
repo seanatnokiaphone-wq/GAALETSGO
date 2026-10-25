@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import type { PlayerFigure } from '../scene/player';
+import type { Figure } from '../scene/player';
 
 export type Team = 'ARD' | 'KIL';
 
@@ -17,7 +17,7 @@ const HOME_SPEED = 2.4;
 const AI_CHARGE_COOLDOWN = 2.5;
 
 export interface Body {
-  fig: PlayerFigure;
+  fig: Figure;
   team: Team;
   keeper: boolean;
   home: BABYLON.Vector3;
@@ -34,7 +34,7 @@ export interface Body {
 
 /** What the crowd needs to know about the player the user controls. */
 export interface Controlled {
-  fig: PlayerFigure;
+  fig: Figure;
   team: Team;
   speed: number;
   hasBall: boolean;
@@ -51,7 +51,7 @@ export type Contact = { kind: 'bump' | 'shoulderedBy'; by: Body; push: BABYLON.V
 export class Crowd {
   readonly bodies: Body[] = [];
 
-  add(fig: PlayerFigure, team: Team, keeper: boolean): void {
+  add(fig: Figure, team: Team, keeper: boolean): void {
     const p = fig.root.position;
     this.bodies.push({
       fig,
@@ -83,7 +83,7 @@ export class Crowd {
    * The user takes control of `body`'s player: `outgoing` (the player they were controlling, with their
    * own starting spot) joins the crowd in its place. Returns the player taken over and their spot.
    */
-  swapIn(body: Body, outgoing: PlayerFigure, outHome: BABYLON.Vector3, outYaw: number): { fig: PlayerFigure; home: BABYLON.Vector3; homeYaw: number } {
+  swapIn(body: Body, outgoing: Figure, outHome: BABYLON.Vector3, outYaw: number): { fig: Figure; home: BABYLON.Vector3; homeYaw: number } {
     const taken = { fig: body.fig, home: body.home, homeYaw: body.homeYaw };
     body.fig = outgoing;
     body.home = outHome.clone();
@@ -162,9 +162,9 @@ export class Crowd {
         }
       }
       b.phase += ((moved * dt) / 1.5) * Math.PI;
-      if (b.stun > 0) b.fig.pose('stumble');
-      else if (b.charging > 0) b.fig.pose('shoulder');
-      else if (moved > 0.3) b.fig.pose('run', b.phase);
+      if (b.stun > 0) b.fig.pose('stumble', 0, 0);
+      else if (b.charging > 0) b.fig.pose('shoulder', 0, moved);
+      else if (moved > 0.3) b.fig.pose('run', b.phase, moved);
       else b.fig.pose(b.keeper ? 'keeper' : 'stand');
     }
 

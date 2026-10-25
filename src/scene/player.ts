@@ -19,8 +19,17 @@ export const KITS = {
 
 export type PoseName = 'stand' | 'run' | 'carry' | 'kick' | 'handPass' | 'jump' | 'keeper' | 'toePick' | 'solo' | 'shoulder' | 'stumble';
 
+/** What the game needs from a player's body, whichever model draws it. */
+export interface Figure {
+  readonly root: BABYLON.TransformNode;
+  readonly num: number;
+  place(x: number, z: number, fx: number, fz: number): void;
+  /** `phase` is the run-cycle angle (or a move's progress 0 to 1); `speed` is ground speed in m/s. */
+  pose(name: PoseName, phase?: number, speed?: number): void;
+}
+
 /** Greybox player: a jointed capsule figure. Stands in until rigged glTF characters arrive. */
-export class PlayerFigure {
+export class PlayerFigure implements Figure {
   readonly root: BABYLON.TransformNode;
   private hips: BABYLON.TransformNode;
   private joints: Record<'lThigh' | 'rThigh' | 'lShin' | 'rShin' | 'lArm' | 'rArm' | 'lFore' | 'rFore', BABYLON.TransformNode>;
@@ -114,7 +123,7 @@ export class PlayerFigure {
 
   /**
    * Procedural pose. `phase` is the run-cycle angle in radians (for 'solo', the move's progress 0 to 1). Negative x rotation swings a limb forward. */
-  pose(name: PoseName, phase = 0): void {
+  pose(name: PoseName, phase = 0, _speed = 0): void {
     const j = this.joints;
     const set = (k: keyof typeof j, x: number, z = 0) => {
       j[k].rotation.x = x;
@@ -197,7 +206,7 @@ export class PlayerFigure {
 }
 
 const numberMats = new Map<string, BABYLON.StandardMaterial>();
-function numberMaterial(scene: BABYLON.Scene, num: number, kit: Kit): BABYLON.StandardMaterial {
+export function numberMaterial(scene: BABYLON.Scene, num: number, kit: Kit): BABYLON.StandardMaterial {
   const key = `${num}${kit.numberColour}${kit.jersey}`;
   let m = numberMats.get(key);
   if (!m) {

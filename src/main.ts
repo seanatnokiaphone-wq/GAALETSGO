@@ -4,7 +4,8 @@ import { HALF_LENGTH as HL, HALF_WIDTH as HW, RULE_SETS, type RuleSet } from './
 import { createEnvironment, createPostProcessing } from './scene/environment';
 import { createGoals } from './scene/goals';
 import { createPitch } from './scene/pitch';
-import { KITS, PlayerFigure } from './scene/player';
+import { KITS, PlayerFigure, type Figure, type Kit } from './scene/player';
+import { AthleteLibrary } from './scene/athlete';
 import { Crowd } from './game/bodies';
 import { createStadium } from './scene/stadium';
 import { Ball } from './game/ball';
@@ -60,23 +61,36 @@ async function start(): Promise<void> {
 
   // Everyone else starts in formation. Kilcarra close down the ball carrier and shoulder them; full
   // team AI arrives in a later milestone.
+  // Rigged, motion-captured players; the simple capsule figures if the model can't load, with
+  // ?figures=simple, or by default on phones and tablets (unless ?figures=full), to keep them smooth.
+  const figuresParam = params.get('figures');
+  let athletes: AthleteLibrary | null = null;
+  if (figuresParam !== 'simple' && (!touch || figuresParam === 'full')) {
+    try {
+      athletes = await AthleteLibrary.load(scene, shadows, 'models/ybot.glb', [KITS.ardmore, KITS.kilcarra, KITS.ardmoreKeeper, KITS.kilcarraKeeper]);
+    } catch (e) {
+      console.warn('Falling back to simple player figures:', e);
+    }
+  }
+  const makeFigure = (kit: Kit, num: number, seed: number): Figure => (athletes ? athletes.create(kit, num, seed) : new PlayerFigure(scene, kit, num, shadows, seed));
+
   const crowd = new Crowd();
   LINE_UP.forEach(([x, z], i) => {
     const num = i + 1;
     if (num !== 14) {
-      const a = new PlayerFigure(scene, i === 0 ? KITS.ardmoreKeeper : KITS.ardmore, num, shadows, i);
+      const a = makeFigure(i === 0 ? KITS.ardmoreKeeper : KITS.ardmore, num, i);
       a.place(x * 0.8, z, HL, z);
       a.pose(i === 0 ? 'keeper' : 'stand');
       crowd.add(a, 'ARD', i === 0);
     }
-    const b = new PlayerFigure(scene, i === 0 ? KITS.kilcarraKeeper : KITS.kilcarra, num, shadows, i + 15);
+    const b = makeFigure(i === 0 ? KITS.kilcarraKeeper : KITS.kilcarra, num, i + 15);
     const bx = i === 0 ? HL - 1.2 : -x * 0.75 + 4;
     b.place(bx, -z * 0.9, -HL, -z);
     b.pose(i === 0 ? 'keeper' : 'stand');
     crowd.add(b, 'KIL', i === 0);
   });
 
-  const me = new PlayerFigure(scene, KITS.ardmore, 14, shadows, 3);
+  const me = makeFigure(KITS.ardmore, 14, 3);
   const ball = new Ball(scene, shadows);
   createPostProcessing(scene, camera, touch ? 1 : 4);
 
@@ -106,6 +120,9 @@ async function start(): Promise<void> {
   });
   // Exposed for automated screenshots and debugging in the console.
   Object.assign(window, { gaa: { scene, engine, match, HW } });
+
+  // Compile the player shaders behind the loading screen, so nobody pops in on the first frames.
+  await scene.whenReadyAsync();
 
   document.getElementById('loading')?.remove();
   const startScreen = document.getElementById('start');

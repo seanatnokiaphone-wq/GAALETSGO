@@ -12,7 +12,7 @@ import {
   type ShotMethod,
   type TeamScore,
 } from '../rules';
-import { PlayerFigure, type PoseName } from '../scene/player';
+import { PlayerFigure, type Figure, type PoseName } from '../scene/player';
 import { BALL_RADIUS, Ball, predictFlight } from './ball';
 import { BallCam } from './ballcam';
 import { Crowd, SHOULDER_REACH } from './bodies';
@@ -110,7 +110,7 @@ export class Match {
   /** Push on the controlled player from bumps and shoulders; fades away. */
   private meKnock = BABYLON.Vector3.Zero();
   /** The player the game starts with (#14), and the controlled player's own spot in the formation. */
-  private startFig: PlayerFigure;
+  private startFig: Figure;
   private myHome = new BABYLON.Vector3(35, 0, -4);
   private myHomeYaw = 0;
   /** 0 looks ahead of the player, 1 looks at the ball; eased so the camera doesn't jump. */
@@ -136,7 +136,7 @@ export class Match {
   constructor(
     private scene: BABYLON.Scene,
     private camera: BABYLON.UniversalCamera,
-    private player: PlayerFigure,
+    private player: Figure,
     private ball: Ball,
     private input: Input,
     private hud: Hud,
@@ -352,17 +352,18 @@ export class Match {
 
     if (this.actionPose) {
       this.actionPose.t -= dt;
-      this.player.pose(this.actionPose.pose);
+      this.player.pose(this.actionPose.pose, 0, this.speed);
       if (this.actionPose.t <= 0) this.actionPose = null;
     } else if (this.carry.kind === 'toePick') {
-      this.player.pose('toePick');
+      this.player.pose('toePick', 0, this.speed);
     } else if (this.carry.kind === 'solo') {
       // The ball drops onto the right toe and is kicked back up to the hands.
-      this.player.pose('solo', Math.min(1, this.carry.t / MOVE_DURATION.solo));
+      this.player.pose('solo', Math.min(1, this.carry.t / MOVE_DURATION.solo), this.speed);
     } else if (this.speed > 0.3) {
-      this.player.pose(this.carry.kind === 'hand' ? 'carry' : 'run', this.phase);
+      this.player.pose(this.carry.kind === 'hand' ? 'carry' : 'run', this.phase, this.speed);
     } else {
-      this.player.pose('stand');
+      // Standing still, but still holding the ball up in both hands.
+      this.player.pose(this.carry.kind === 'hand' ? 'carry' : 'stand', 0, 0);
     }
   }
 
@@ -543,7 +544,7 @@ export class Match {
   }
 
   /** Take control of the Ardmore outfield player nearest the ball (or the start player, for a new game). */
-  private switchPlayer(to?: PlayerFigure): void {
+  private switchPlayer(to?: Figure): void {
     const ball = this.ball.position;
     let best: (typeof this.crowd.bodies)[number] | null = null;
     let bestD = Math.hypot(ball.x - this.player.root.position.x, ball.z - this.player.root.position.z);

@@ -85,3 +85,10 @@ src/
   game/    ball (Havok body + air drag), input, HUD, and the match slice
 tests/     Vitest tests for the rules engine
 ```
+
+## Credits
+
+The players are the Mixamo Y Bot, motion-captured idle, walk and run included, taken from the
+[Babylon.js Assets](https://github.com/BabylonJS/Assets) repository (CC BY 4.0) and converted to
+`public/models/ybot.glb`. Kits are painted onto the mesh at load time. Add `?figures=simple` to the URL
+for the lightweight capsule players; phones and tablets use those by default (`?figures=full` overrides).
