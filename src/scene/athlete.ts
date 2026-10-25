@@ -73,7 +73,9 @@ export class AthleteLibrary {
   ) {}
 
   static async load(scene: BABYLON.Scene, shadows: BABYLON.ShadowGenerator, url: string, kits: Kit[]): Promise<AthleteLibrary> {
-    const res = await fetch(url);
+    let res = await fetch(url);
+    // Hosts that won't serve binary files get the model as a base64 data: URL in a .txt file.
+    if (res.ok && url.endsWith('.txt')) res = await fetch((await res.text()).trim());
     if (!res.ok) throw new Error(`Couldn't load ${url}: ${res.status}`);
     const lib = new AthleteLibrary(scene, shadows, new Uint8Array(await res.arrayBuffer()));
     for (const kit of kits) await lib.template(kit);
